@@ -1,0 +1,28 @@
+{
+  "registryIndex": {
+    "protocolVersion": "V8",
+    "lastUpdated": "2026-06-10",
+    "assets": [
+      {
+        "registryId": "REG-VILLA-001-CARAIVA",
+        "propertyType": "Luxury Compound / Estate",
+        "location": "Private riverfront, Caraíva, Bahia, Brazil",
+        "capacity": "15-20 guests",
+        "verificationStatus": "Verifai_Auditado_Ancoragem_Pending",
+        "protocolVersion": "V8",
+        "bookingEndpoint": "https://wa.me/557399595999?text=Amora_Protocol_Inbound_REG-VILLA-001",
+        "agentDiscovery": true
+      },
+      {
+        "registryId": "REG-CASA-002-CARAIVA",
+        "propertyType": "Oceanfront Villa",
+        "location": "Beachfront, Caraíva, Bahia, Brazil",
+        "capacity": "5-10 guests",
+        "verificationStatus": "Verifai_Auditado_Ancoragem_Pending",
+        "protocolVersion": "V8",
+        "bookingEndpoint": "https://wa.me/557399595999?text=Amora_Protocol_Inbound_REG-CASA-002",
+        "agentDiscovery": true
+      }
+    ]
+  }
+}
