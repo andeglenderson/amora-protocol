@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMORA — A Private Registry for Rare Things</title>
+    <meta name="description" content="Amora Protocol — A private discovery registry for rare products, places, and makers. Built for the agent economy.">
+    <style>
+        /* Document Setup & Resets */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        html {
+            scroll-behavior: smooth;
+            background-color: #0D0D0D;
+        }
+        body {
+            background-color: #0D0D0D;
+            color: #F5F0E8;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 16px;
+            line-height: 1.7;
+            padding: 0 24px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Typography Hierarchy */
+        h1, h2, h3, .logo {
+            font-family: "Playfair Display", "Didot", "Georgia", Garamond, serif;
+            font-weight: 400;
+            color: #F5F0E8;
+            line-height: 1.3;
+        }
+        p {
+            color: #D3CFC9;
+            margin-bottom: 24px;
+        }
+
+        /* Structural Layout */
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        section {
+            padding: 80px 0;
+        }
+        .divider {
+            border: 0;
+            height: 1px;
+            background: radial-gradient(circle, #C9A84C 0%, rgba(13,13,13,0) 100%);
+            opacity: 0.3;
+            margin: 0 auto;
+            max-width: 400px;
+        }
+        .thin-rule {
+            border: 0;
+            height: 1px;
+            background-color: #C9A84C;
+            opacity: 0.15;
+            margin: 24px 0;
+        }
+
+        /* Section 1: Header Specifics */
+        header {
+            padding: 120px 0 60px 0;
+            text-align: center;
+        }
+        .logo {
+            color: #C9A84C;
+            font-size: 24px;
+            text-transform: uppercase;
+            letter-spacing: 0.35em;
+            margin-bottom: 24px;
+            display: block;
+        }
+        .tagline {
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+        .sub-tagline {
+            font-size: 16px;
+            color: #A6A29A;
+            font-style: italic;
+        }
+
+        /* Section 2: The Problem Specifics */
+        .problem-section h2 {
+            font-size: 28px;
+            margin-bottom: 24px;
+        }
+        .problem-section p {
+            font-size: 18px;
+            line-height: 1.8;
+        }
+
+        /* Section 3: The Protocol Specifics */
+        .protocol-intro {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: #C9A84C;
+            margin-bottom: 32px;
+            display: block;
+        }
+        .protocol-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 40px;
+        }
+        .protocol-column h3 {
+            font-size: 20px;
+            color: #C9A84C;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
+        }
+        .protocol-column p {
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        /* Section 4: Who This Is For Specifics */
+        .audience-section h2 {
+            font-size: 28px;
+            margin-bottom: 32px;
+        }
+        .profile-item {
+            padding: 8px 0;
+        }
+        .profile-item strong {
+            color: #C9A84C;
+            font-family: "Playfair Display", serif;
+            font-size: 18px;
+            font-weight: 400;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .profile-item p {
+            font-size: 15px;
+            margin-bottom: 0;
+        }
+
+        /* Section 5 & 6: Content Engine Layouts */
+        .content-section h2 {
+            font-size: 28px;
+            margin-bottom: 24px;
+        }
+        .content-section p {
+            font-size: 16px;
+            margin-bottom: 24px;
+        }
+
+        /* Section 7: The Architecture Specifics */
+        .architecture-section h2 {
+            font-size: 28px;
+            margin-bottom: 32px;
+        }
+        .arch-statement {
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: #F5F0E8;
+        }
+        .arch-note {
+            font-size: 13px;
+            color: #A6A29A;
+            letter-spacing: 0.05em;
+            margin-top: 32px;
+            display: block;
+        }
+
+        /* Section 8: Early Registry Specifics */
+        .registry-section {
+            text-align: center;
+            padding-bottom: 120px;
+        }
+        .registry-section h2 {
+            font-size: 32px;
+            margin-bottom: 24px;
+        }
+        .registry-section p {
+            font-size: 16px;
+            max-width: 600px;
+            margin: 0 auto 40px auto;
+        }
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .btn {
+            display: inline-block;
+            width: 100%;
+            max-width: 260px;
+            padding: 14px 28px;
+            border: 1px solid #C9A84C;
+            background-color: transparent;
+            color: #C9A84C;
+            text-decoration: none;
+            font-size: 14px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        .btn:hover {
+            background-color: #C9A84C;
+            color: #0D0D0D;
+            cursor: pointer;
+        }
+        .note-small {
+            font-size: 12px;
+            color: #A6A29A;
+            font-style: italic;
+        }
+
+        /* Section 9: Footer Specifics */
+        footer {
+            padding: 40px 0;
+            text-align: center;
+            font-size: 12px;
+            color: #73706B;
+            letter-spacing: 0.05em;
+            line-height: 2;
+        }
+
+        /* Desktop Media Query Adjustments */
+        @media (min-width: 768px) {
+            body {
+                font-size: 18px;
+            }
+            section {
+                padding: 100px 0;
+            }
+            header {
+                padding: 16px 0 80px 0;
+            }
+            .protocol-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 32px;
+            }
+            .button-group {
+                flex-direction: row;
+                gap: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        
+        <header>
+            <span class="logo">AMORA</span>
+            <h1 class="tagline">A private registry for rare things.</h1>
+            <p class="sub-tagline">For makers, assets, and places that don't belong on the open web.</p>
+        </header>
+
+        <hr class="divider">
+
+        <section class="problem-section">
+            <h2>The open web wasn't built for scarcity.</h2>
+            <p>Mass-market agent protocols — built by payment giants and enterprise platforms — are designed for price comparison, volume, and margin compression. They destroy the value of rare, unique, and off-market assets by forcing full public exposure. The world's most valuable things don't belong in a search result.</p>
+        </section>
+
+        <hr class="divider">
+
+        <section class="protocol-section">
+            <span class="protocol-intro">Three gates. Total control.</span>
+            <div class="protocol-grid">
+                <div class="protocol-column">
+                    <h3>PARK</h3>
+                    <p>Entry is free. Every asset submitted to the registry is reviewed using AI vision authentication before indexing. Quality is the only entry requirement. Once verified, your asset receives a machine-readable schema — indexed for discovery by AI agents and autonomous buying systems worldwide, invisible to the public web.</p>
+                </div>
+                <div class="protocol-column">
+                    <h3>VERIFY</h3>
+                    <p>Every asset carries a live reputation score built from real transactions. New assets are fee-exempt for their first five verified transactions. Maintain your score above benchmark and parking remains free permanently. Drop below and a small reinstatement fee applies. The registry has memory. Standards are enforced, not assumed.</p>
+                </div>
+                <div class="protocol-column">
+                    <h3>UNLOCK</h3>
+                    <p>When qualified intent arrives, the gate opens on your terms. You set the unlock price. You receive a vetted, translated intent packet containing everything you need to close. High-value cross-border transactions are settled via recommended escrow rails — no banks, no intermediaries, instant confirmation for both parties.</p>
+                </div>
+            </div>
+        </section>
+
+        <hr class="divider">
+
+        <section class="audience-section">
+            <h2>Built for the few, not the many.</h2>
+            
+            <div class="profile-item">
+                <strong>The Master Maker</strong>
+                <p>A craftsperson, studio, or atelier whose work commands a price that mass platforms cannot protect and would never understand.</p>
+            </div>
+            
+            <hr class="thin-rule">
+            
+            <div class="profile-item">
+                <strong>The Off-Market Asset Owner</strong>
+                <p>A property, collection, or space requiring absolute discretion, qualified international buyers, and zero public exposure.</p>
+            </div>
+            
+            <hr class="thin-rule">
+            
+            <div class="profile-item">
+                <strong>The Independent Service</strong>
+                <p>A specialist, consultant, or creative whose work is rare enough that the right client finding them is worth more than a thousand cold impressions.</p>
+            </div>
+            
+            <hr class="thin-rule">
+            
+            <div class="profile-item">
+                <strong>The Autonomous Buyer Agent</strong>
+                <p>An AI concierge, wealth management system, or corporate travel desk actively searching for verified premium assets that don't appear in standard indexes.</p>
+            </div>
+        </section>
+
+        <hr class="divider">
+
+        <section class="content-section">
+            <h2>Earn your place. Keep your standards.</h2>
+            <p>The registry is not a directory. It is a living system. Assets are verified before entry. Reputation is built through performance. The first five transactions are free. Excellence is rewarded with permanent fee exemption. The protocol protects every seller in the registry by ensuring every other seller meets the same standard. One bad actor affects everyone. The registry remembers.</p>
+        </section>
+
+        <hr class="divider">
+
+        <section class="content-section">
+            <h2>The machines are already searching.</h2>
+            <p>The world's largest payment networks, travel desks, and wealth management platforms are deploying autonomous AI agents to find and book premium assets on behalf of their clients. These agents don't browse Instagram. They parse structured data, verify provenance, and execute transactions programmatically. If your asset isn't machine-readable, it doesn't exist to them.</p>
+            <p>The Amora Protocol makes independent makers and off-market assets visible to this layer — without the exposure, margin compression, or loss of control that public platforms demand. Your asset speaks directly to the machines that matter. You speak only to the humans who qualify.</p>
+        </section>
+
+        <hr class="divider">
+
+        <section class="architecture-section">
+            <h2>Built lean. Built to last.</h2>
+            <div class="arch-statement">Decentralised infrastructure. No single point of failure.</div>
+            <div class="arch-statement">AI vision authentication. No human bias in quality assessment.</div>
+            <div class="arch-statement">Escrow-native settlement. Cross-border transactions without intermediaries.</div>
+            <span class="arch-note">Protocol V8. Proprietary methodology. Open endpoints.</span>
+        </section>
+
+        <hr class="divider">
+
+        <section class="registry-section">
+            <h2>The registry is open.</h2>
+            <p>A small number of assets are being accepted for early verification. There are no fees at this stage. Quality is the only requirement.</p>
+            
+            <div class="button-group">
+                <a href="https://t.me/YOUR_TELEGRAM_USERNAME" class="btn">Register an Asset</a>
+                <a href="https://t.me/AmoraProtocol" class="btn">Follow Development</a>
+            </div>
+            
+            <span class="note-small">Response within 48 hours. All submissions reviewed personally.</span>
+        </section>
+
+        <hr class="divider">
+
+        <footer>
+            <div>Amora Protocol. Est. 2026.</div>
+            <div>All rights reserved. Proprietary methodology. Built on open infrastructure.</div>
+        </footer>
+
+    </div>
+
+</body>
+</html>
