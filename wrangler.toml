@@ -1,8 +1,3 @@
 name = "amora-x402-gateway"
 main = "edge/worker.js"
 compatibility_date = "2026-06-18"
-
-# Bind the KV namespace used for caching verification results
-kv_namespaces = [
-  { binding = "PROVENANCE_CACHE", id = "YOUR_KV_NAMESPACE_ID" }
-]
