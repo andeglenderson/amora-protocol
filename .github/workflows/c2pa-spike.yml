@@ -1,0 +1,22 @@
+name: C2PA WASM Compile Spike
+on:
+  workflow_dispatch:
+
+jobs:
+  spike:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Create throwaway crate
+        run: |
+          cargo new c2pa-spike --bin
+          cd c2pa-spike
+          cargo add c2pa
+
+      - name: Attempt wasm32 build
+        run: |
+          cd c2pa-spike
+          cargo build --target wasm32-unknown-unknown
