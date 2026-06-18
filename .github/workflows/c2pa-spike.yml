@@ -14,9 +14,10 @@ jobs:
         run: |
           cargo new c2pa-spike --bin
           cd c2pa-spike
-          cargo add c2pa
+          cargo add c2pa --no-default-features --features rust_native_crypto
 
       - name: Attempt wasm32 build
         run: |
           cd c2pa-spike
           cargo build --target wasm32-unknown-unknown
+          
