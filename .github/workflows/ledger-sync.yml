@@ -1,0 +1,78 @@
+name: GitOps Ledger Accountant
+
+on:
+  repository_dispatch:
+    types: [ledger_entry, settlement_failure]
+
+# 🏁 THE CONCURRENCY SHIELD (2026 Engine Upgrade)
+# This prevents race conditions. If 50 bots ping GitHub at the same millisecond, 
+# GitHub queues up to 100 jobs sequentially in FIFO order rather than clashing.
+concurrency:
+  group: ledger-mutations-${{ github.repository }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Ledger Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- BRANCH A: HANDLE SUCCESSFUL TRANSACTION ---
+      - name: Process Micro-Payment Debit
+        if: github.event.action == 'ledger_entry'
+        run: |
+          echo "Processing successful payment for asset: ${{ github.event.client_payload.assetRef }}"
+          
+          # Initialize balances.json if it doesn't exist
+          if [ ! -f data/balances.json ]; then
+            mkdir -p data
+            echo "{}" > data/balances.json
+          fi
+          
+          # Extract values from the Cloudflare payload
+          TIER="${{ github.event.client_payload.tier }}"
+          # Deduce amount from the settlement object or pass it directly
+          AMOUNT="${{ github.event.client_payload.settlement.amount || '2000' }}"
+          
+          # Use Node to cleanly handle the JSON math subtraction without breaking formatting
+          node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('data/balances.json', 'utf8'));
+            const assetRef = '${{ github.event.client_payload.assetRef }}';
+            
+            // Log transaction or deduct from a global client balance pool
+            if (!data[assetRef]) data[assetRef] = { hits: 0, total_spent_usdc: 0 };
+            data[assetRef].hits += 1;
+            data[assetRef].total_spent_usdc += (parseInt('$AMOUNT') / 1000000);
+            data[assetRef].last_verified = new Date().toISOString();
+            
+            fs.writeFileSync('data/balances.json', JSON.stringify(data, null, 2));
+          "
+
+      # --- BRANCH B: HANDLE SETTLEMENT FAILURE ---
+      - name: Log Defaulter to Audit Trail
+        if: github.event.action == 'settlement_failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const payload = context.payload.client_payload;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `⚠️ DISPUTE: Settlement Failure on Tier [${payload.tier}]`,
+              body: `An AI Agent requested a provenance verification but the final settlement call failed.\n\n**Asset Hash/URL:** ${payload.assetRef}\n**Error Logged:** ${payload.error}\n\nThis flag has been immutably recorded to the agent's reputation matrix.`
+            });
+
+      # --- SAVE THE LEDGER UPDATES ---
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "Ledger Accountant Bot"
+          git config --global user.email "ledger-bot@yourdomain.dev"
+          git add data/balances.json
+          # Only commit if changes actually occurred to prevent workflow loops
+          git diff-index --quiet HEAD || git commit -m "chore(ledger): reconcile transactions [skip ci]"
+          git push origin main
