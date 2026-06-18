@@ -1,106 +1,89 @@
 /**
- * C2PA Provenance Verification — x402 Resource Server
- * Cloudflare Worker
- *
- * Safety rule: Any tier marked false in IMPLEMENTED short-circuits to a 501
- * BEFORE payment challenges are built or headers are parsed.
+ * AMORA X402 Edge Gateway - C2PA CPU Performance Spike
+ * Benchmarks binary parsing and cryptographic budget ceilings on V8 Isolate lines.
  */
-
-const FACILITATOR_URL = "https://x402.org/facilitator"; 
-const NETWORK = "base";
-const USDC_ASSET = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; 
-
-const PRICE_TABLE = {
-  shallow: { amount: "2000",  timeout: 30 },  // $0.002
-  deep:    { amount: "15000", timeout: 45 },  // $0.015
-  batch:   { amount: "60000", timeout: 60 },  // $0.06
-};
-
-// 🛑 THE MASTER SAFETY SWITCHES
-// Only flip a tier to true in the same commit that wires in real validation logic.
-const IMPLEMENTED = {
-  shallow: false,
-  deep:    false,
-  batch:   false,
-};
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const tier = url.pathname.endsWith("/verify-provenance/deep") ? "deep" :
-                 url.pathname.endsWith("/verify-provenance/batch") ? "batch" :
-                 url.pathname.endsWith("/verify-provenance") ? "shallow" : null;
 
-    if (!tier) {
-      return json({ error: "unknown resource" }, 404);
+    // Capture our dedicated verification route
+    if (url.pathname !== "/verify-provenance") {
+      return new Response("Not Found", { status: 404 });
     }
 
-    // --- Hard stop before anything payment-related happens ---
-    if (!IMPLEMENTED[tier]) {
-      return json({
-        error: "not_implemented",
-        detail: `Provenance verification for tier [${tier}] is not yet active. ` +
-                `No payment is required, accepted, or possible for this resource.`,
-      }, 501);
-    }
-
-    const assetRef = url.searchParams.get("asset"); 
-    if (!assetRef && tier !== "batch") {
-      return json({ error: "missing 'asset' param" }, 400);
-    }
-
-    const paymentHeader = request.headers.get("X-PAYMENT");
-    const requirements = {
-      scheme: "exact",
-      network: NETWORK,
-      asset: USDC_ASSET,
-      payTo: "YOUR_SETTLEMENT_WALLET_ADDRESS",
-      maxAmountRequired: PRICE_TABLE[tier].amount,
-      maxTimeoutSeconds: PRICE_TABLE[tier].timeout,
-      resource: url.toString(),
-    };
-
-    if (!paymentHeader) {
-      return json({ x402Version: 1, accepts: [requirements] }, 402);
-    }
-
-    // --- Verify payment with facilitator ---
-    let verifyResult;
     try {
-      verifyResult = await callFacilitator("/verify", {
-        x402Version: 1,
-        paymentPayload: JSON.parse(atob(paymentHeader)),
-        paymentRequirements: requirements,
-      });
+      if (request.method !== "POST") {
+        return new Response(
+          JSON.stringify({
+            error: "bad_request",
+            detail: "Send a POST request containing a C2PA-signed image block to benchmark."
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      const arrayBuffer = await request.arrayBuffer();
+      const view = new DataView(arrayBuffer);
+
+      // Start the High-Resolution CPU Clock
+      const cpuStart = performance.now();
+
+      // ==========================================
+      // SPIKE EXECUTION: JUMBF Box Binary Scan
+      // ==========================================
+      let jumbBoxFound = false;
+      let offset = 0;
+
+      while (offset < arrayBuffer.byteLength - 4) {
+        const marker = view.getUint16(offset, false);
+        if (marker === 0xFFEB) { 
+          jumbBoxFound = true;
+          break;
+        }
+        offset++;
+      }
+
+      // Simulate cryptographic calculation overhead (Cert chain verification math)
+      let simulatedCryptoCompute = 0;
+      for (let i = 0; i < 500000; i++) {
+        simulatedCryptoCompute += Math.sin(i) * Math.cos(i);
+      }
+      // ==========================================
+
+      const cpuEnd = performance.now();
+      const totalCpuTimeMs = cpuEnd - cpuStart;
+
+      const freeTierCeilingExceeded = totalCpuTimeMs > 10.0;
+      const paidTierCeilingExceeded = totalCpuTimeMs > 50.0;
+
+      return new Response(
+        JSON.stringify({
+          status: "benchmark_complete",
+          metrics: {
+            asset_size_bytes: arrayBuffer.byteLength,
+            jumb_marker_detected: jumbBoxFound,
+            scan_offset_reached: offset,
+            measured_cpu_time_ms: parseFloat(totalCpuTimeMs.toFixed(4))
+          },
+          environment_evaluation: {
+            compatible_with_free_tier_10ms: !freeTierCeilingExceeded,
+            compatible_with_paid_tier_50ms: !paidTierCeilingExceeded,
+            recommendation: freeTierCeilingExceeded ? "Upgrade to Paid Tier Required" : "Safe for standard Edge deployment"
+          }
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json", "X-Amora-Gateway-Perf": `${totalCpuTimeMs}ms` }
+        }
+      );
+
     } catch (err) {
-      return json({ error: "facilitator unreachable", detail: String(err) }, 502);
+      return new Response(
+        JSON.stringify({ error: "runtime_crash", detail: err.message }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
     }
-
-    if (!verifyResult.isValid) {
-      return json({ x402Version: 1, accepts: [requirements], error: verifyResult.invalidReason }, 402);
-    }
-
-    // Unreachable fallback safety net
-    return json({
-      error: "not_implemented",
-      detail: `Verified payment, but provenance logic for [${tier}] is still pending.`,
-    }, 501);
-  },
-};
-
-async function callFacilitator(path, body) {
-  const res = await fetch(FACILITATOR_URL + path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`facilitator ${path} failed`);
-  return res.json();
-}
-
-function json(obj, status = 200, extraHeaders = {}) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { "Content-Type": "application/json", ...extraHeaders },
-  });
   }
+};
+              
