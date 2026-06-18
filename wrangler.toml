@@ -1,3 +1,9 @@
 name = "amora-x402-gateway"
 main = "edge/worker.js"
 compatibility_date = "2026-06-18"
+
+[rules]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+fallthrough = true
+
