@@ -1,0 +1,22 @@
+name: Deploy Worker
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "edge/worker.js"
+      - "wrangler.toml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Deploy via Wrangler Action
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          
