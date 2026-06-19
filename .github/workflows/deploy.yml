@@ -1,22 +1,27 @@
-name: Deploy Worker
+name: Deploy
 
 on:
   push:
     branches:
       - main
-    paths:
-      - "edge/worker.js"
-      - "wrangler.toml"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    name: deploy
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Deploy via Wrangler Action
+      - name: Install Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CF_API_TOKEN }}
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           
