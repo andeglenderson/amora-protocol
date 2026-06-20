@@ -1,12 +1,7 @@
-name = "amora-x402-gateway"
-main = "edge/worker.js"
-compatibility_date = "2026-06-18"
+name = "x402-dual-gateway"
+main = "src/index.js"
+compatibility_date = "2026-06-20"
 
-[build]
-command = "wasm-pack build --target bundler --release"
-
-[[rules]]
-type = "CompiledWasm"
-globs = ["**/*.wasm"]
-
-
+[vars]
+ENVIRONMENT = "production"
+X402_PRICE_FLOOR = "2000" # Defined in base units (e.g., $0.002)
