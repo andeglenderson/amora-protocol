@@ -21,7 +21,7 @@ export default {
     }
 
     // 2. Route to Endpoint A: The Trust Oracle (Content-Aware)
-    if (url.pathname === "/verify" && request.method === "POST") {
+    if (url.pathname === "/verify")
       return await handleVerify(request, env, ctx);
     }
 
