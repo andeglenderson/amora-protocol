@@ -12,11 +12,22 @@ export default {
           runtime: "v8-edge-isolate",
           gateways: ["/verify", "/stamp"]
         }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        }
+        { status: 200, headers: { "Content-Type": "application/json" } }
       );
+    }
+
+    if (url.pathname === "/openapi.json") {
+      const res = await fetch(
+        "https://raw.githubusercontent.com/andeglenderson/amora-protocol/main/openapi.json"
+      );
+      const spec = await res.text();
+      return new Response(spec, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
+      });
     }
 
     if (url.pathname === "/verify") {
@@ -32,10 +43,7 @@ export default {
         error: "Not Found",
         message: "Resource does not exist or method is invalid."
       }),
-      {
-        status: 404,
-        headers: { "Content-Type": "application/json" }
-      }
+      { status: 404, headers: { "Content-Type": "application/json" } }
     );
   }
 };
