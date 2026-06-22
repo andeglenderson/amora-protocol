@@ -16,7 +16,6 @@
         "summary": "Trust Oracle — C2PA Media Provenance Verification",
         "description": "Fetches the asset at the provided URL, parses its C2PA manifest, validates the cryptographic signing chain against trusted certificate authorities, and returns a structured verification result. Attestation is limited to cryptographic validity at query time — no claim is made regarding real-world content accuracy.",
         "tags": ["Trust", "C2PA", "Media"],
-        "security": [],
         "x-payment-info": {
           "price": {
             "mode": "fixed",
@@ -75,7 +74,6 @@
         "summary": "Economic Notary — Content-Blind Proof-of-Cost Stamp",
         "description": "Accepts any JSON payload, confirms x402 micropayment, and returns a cryptographically signed economic envelope. Content-blind: the payload is not read, parsed, or judged. Attestation states only that a financial cost was incurred at the moment of submission.",
         "tags": ["Notary", "Anti-Spam", "M2M"],
-        "security": [],
         "x-payment-info": {
           "price": {
             "mode": "fixed",
