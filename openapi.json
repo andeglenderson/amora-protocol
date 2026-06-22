@@ -1,0 +1,174 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Amora Protocol — x402 Dual-Gateway",
+    "version": "1.0.0",
+    "description": "A zero-database x402 payment gateway with two endpoints: a C2PA media provenance Trust Oracle (/verify) and a content-blind Economic Notary (/stamp). Built on Cloudflare Workers. Settles in USDC on Base.",
+    "x-guidance": "Send a GET request to /verify?asset=<url> or POST to /stamp with a JSON body containing a targetHash field. Both endpoints require x402 payment via X-PAYMENT header. Hit /health for status.",
+    "contact": {
+      "email": "andeglenderson@gmail.com"
+    }
+  },
+  "paths": {
+    "/verify": {
+      "get": {
+        "operationId": "verifyProvenance",
+        "summary": "Trust Oracle — C2PA Media Provenance Verification",
+        "description": "Fetches the asset at the provided URL, parses its C2PA manifest, validates the cryptographic signing chain against trusted certificate authorities, and returns a structured verification result. Attestation is limited to cryptographic validity at query time — no claim is made regarding real-world content accuracy.",
+        "tags": ["Trust", "C2PA", "Media"],
+        "x-payment-info": {
+          "price": {
+            "mode": "fixed",
+            "currency": "USD",
+            "amount": "0.002"
+          },
+          "protocols": [{ "x402": {} }]
+        },
+        "parameters": [
+          {
+            "name": "asset",
+            "in": "query",
+            "required": true,
+            "description": "Public URL of the media asset to verify",
+            "schema": { "type": "string", "format": "uri" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "verified": { "type": "boolean" },
+                    "signer": { "type": "string" },
+                    "signedAt": { "type": "string", "format": "date-time" },
+                    "asset": { "type": "string" },
+                    "tier": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment required — x402 challenge",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "x402Version": { "type": "integer" },
+                    "accepts": { "type": "array" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stamp": {
+      "post": {
+        "operationId": "stampPayload",
+        "summary": "Economic Notary — Content-Blind Proof-of-Cost Stamp",
+        "description": "Accepts any JSON payload, confirms x402 micropayment, and returns a cryptographically signed economic envelope. Content-blind: the payload is not read, parsed, or judged. Attestation states only that a financial cost was incurred at the moment of submission.",
+        "tags": ["Notary", "Anti-Spam", "M2M"],
+        "x-payment-info": {
+          "price": {
+            "mode": "fixed",
+            "currency": "USD",
+            "amount": "0.002"
+          },
+          "protocols": [{ "x402": {} }]
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "targetHash": {
+                    "type": "string",
+                    "description": "Hash or identifier of the payload to stamp"
+                  }
+                },
+                "required": ["targetHash"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stamped economic envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "targetHash": { "type": "string" },
+                    "assertion": { "type": "string" },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment required — x402 challenge",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "x402Version": { "type": "integer" },
+                    "accepts": { "type": "array" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "summary": "Gateway health and status",
+        "description": "Returns gateway status and available endpoints. No payment required.",
+        "tags": ["Health"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Gateway status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "runtime": { "type": "string" },
+                    "gateways": { "type": "array" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "x402Payment": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-PAYMENT",
+        "description": "x402 payment proof header. Obtain by completing the payment challenge returned in the 402 response."
+      }
+    }
+  },
+  "security": [{ "x402Payment": [] }]
+}
