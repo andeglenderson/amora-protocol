@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Amora Protocol — C2PA Verifier</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+    header {
+      margin-bottom: 32px;
+    }
+    header h1 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #fff;
+      letter-spacing: -0.02em;
+    }
+    header p {
+      font-size: 0.8rem;
+      color: #666;
+      margin-top: 4px;
+    }
+    .card {
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .card h2 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 14px;
+    }
+    .drop-zone {
+      border: 1.5px dashed #333;
+      border-radius: 8px;
+      padding: 32px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .drop-zone:hover { border-color: #555; }
+    .drop-zone p { font-size: 0.85rem; color: #555; }
+    .drop-zone span { color: #888; font-size: 0.75rem; display: block; margin-top: 6px; }
+    input[type="file"] { display: none; }
+    #preview {
+      width: 100%;
+      max-height: 180px;
+      object-fit: contain;
+      border-radius: 6px;
+      margin-top: 12px;
+      display: none;
+    }
+    #status {
+      font-size: 0.8rem;
+      color: #666;
+      margin-top: 12px;
+      min-height: 20px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .badge-verified { background: #0f2d1a; color: #4ade80; border: 1px solid #166534; }
+    .badge-unverified { background: #2d0f0f; color: #f87171; border: 1px solid #991b1b; }
+    .badge-none { background: #1a1a1a; color: #888; border: 1px solid #333; }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 10px 0;
+      border-bottom: 1px solid #1e1e1e;
+      font-size: 0.8rem;
+    }
+    .result-row:last-child { border-bottom: none; }
+    .result-label { color: #666; flex-shrink: 0; margin-right: 12px; }
+    .result-value { color: #ccc; text-align: right; word-break: break-all; }
+    .json-block {
+      background: #0d0d0d;
+      border: 1px solid #1e1e1e;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.7rem;
+      color: #4ade80;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 12px;
+      display: none;
+    }
+    .btn {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #ccc;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .btn:hover { border-color: #555; color: #fff; }
+    #results { display: none; }
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #333;
+      border-top-color: #888;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    footer {
+      margin-top: 32px;
+      font-size: 0.7rem;
+      color: #444;
+      text-align: center;
+    }
+    footer a { color: #555; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Amora Protocol</h1>
+  <p>Browser-side C2PA provenance verification — no upload, no server</p>
+</header>
+
+<div class="card">
+  <h2>Select Image</h2>
+  <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
+    <p>Tap to select a file</p>
+    <span>JPEG, PNG, WebP — must contain C2PA manifest</span>
+  </div>
+  <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" />
+  <img id="preview" alt="preview" />
+  <div id="status"></div>
+</div>
+
+<div class="card" id="results">
+  <h2>Verification Result</h2>
+  <div id="summary"></div>
+  <button class="btn" onclick="toggleJson()">Toggle raw manifest</button>
+  <div class="json-block" id="jsonBlock"></div>
+</div>
+
+<footer>
+  <a href="https://x402-dual-gateway.andeglenderson.workers.dev" target="_blank">
+    x402-dual-gateway.andeglenderson.workers.dev
+  </a>
+  &nbsp;·&nbsp; Built on Cloudflare Workers &nbsp;·&nbsp; Settles in USDC on Base
+</footer>
+
+<script type="module">
+  const VERSION = '0.17.2';
+  const LIB_URL = `https://cdn.jsdelivr.net/npm/c2pa@${VERSION}/+esm`;
+  const WASM_SRC = `https://cdn.jsdelivr.net/npm/c2pa@${VERSION}/dist/assets/wasm/toolkit_bg.wasm`;
+  const WORKER_SRC = `https://cdn.jsdelivr.net/npm/c2pa@${VERSION}/dist/c2pa.worker.min.js`;
+
+  let c2pa = null;
+  let rawManifest = null;
+
+  async function initC2pa() {
+    const { createC2pa } = await import(LIB_URL);
+    c2pa = await createC2pa({ wasmSrc: WASM_SRC, workerSrc: WORKER_SRC });
+  }
+
+  function setStatus(msg, loading = false) {
+    const el = document.getElementById('status');
+    el.innerHTML = loading
+      ? `<span class="spinner"></span>${msg}`
+      : msg;
+  }
+
+  function toggleJson() {
+    const el = document.getElementById('jsonBlock');
+    el.style.display = el.style.display === 'block' ? 'none' : 'block';
+  }
+
+  async function verifyFile(file) {
+    const resultsEl = document.getElementById('results');
+    const summaryEl = document.getElementById('summary');
+    const jsonEl = document.getElementById('jsonBlock');
+
+    resultsEl.style.display = 'none';
+    summaryEl.innerHTML = '';
+    jsonEl.style.display = 'none';
+    rawManifest = null;
+
+    setStatus('Initialising C2PA engine…', true);
+
+    try {
+      if (!c2pa) await initC2pa();
+
+      setStatus('Parsing manifest…', true);
+
+      const { manifestStore } = await c2pa.read(file);
+
+      if (!manifestStore) {
+        setStatus('');
+        resultsEl.style.display = 'block';
+        summaryEl.innerHTML = `
+          <div class="result-row">
+            <span class="result-label">Status</span>
+            <span class="result-value"><span class="badge badge-none">No C2PA manifest found</span></span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">File</span>
+            <span class="result-value">${file.name}</span>
+          </div>`;
+        return;
+      }
+
+      const active = manifestStore.activeManifest;
+      const validationStatus = manifestStore.validationStatus ?? [];
+      const isValid = validationStatus.length === 0;
+      const signer = active?.claimGenerator ?? 'Unknown';
+      const signedAt = active?.credentials?.[0]?.notBefore ?? null;
+      const assertions = active?.assertions ?? [];
+
+      rawManifest = manifestStore;
+
+      setStatus('');
+      resultsEl.style.display = 'block';
+
+      summaryEl.innerHTML = `
+        <div class="result-row">
+          <span class="result-label">Status</span>
+          <span class="result-value">
+            <span class="badge ${isValid ? 'badge-verified' : 'badge-unverified'}">
+              ${isValid ? '✓ Verified' : '✗ Validation errors'}
+            </span>
+          </span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">File</span>
+          <span class="result-value">${file.name}</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Claim generator</span>
+          <span class="result-value">${signer}</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Assertions</span>
+          <span class="result-value">${assertions.length} found</span>
+        </div>
+        ${signedAt ? `<div class="result-row">
+          <span class="result-label">Cert valid from</span>
+          <span class="result-value">${signedAt}</span>
+        </div>` : ''}
+        ${!isValid ? `<div class="result-row">
+          <span class="result-label">Errors</span>
+          <span class="result-value" style="color:#f87171">${validationStatus.map(v => v.code).join(', ')}</span>
+        </div>` : ''}
+      `;
+
+      jsonEl.textContent = JSON.stringify(manifestStore, null, 2);
+
+    } catch (err) {
+      setStatus(`Error: ${err.message}`);
+      console.error(err);
+    }
+  }
+
+  document.getElementById('fileInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const preview = document.getElementById('preview');
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = 'block';
+
+    await verifyFile(file);
+  });
+
+  // Pre-init on load so first verify is fast
+  initC2pa().catch(() => {});
+</script>
+
+</body>
+</html>
