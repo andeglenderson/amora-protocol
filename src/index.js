@@ -1,6 +1,31 @@
 import { handleVerify } from './c2pa.js';
 import { handleStamp } from './notary.js';
 
+const PAYMENT_HEADER = 'X-PAYMENT';
+
+function payment402Response(developerWallet) {
+  return new Response(
+    JSON.stringify({
+      x402Version: 1,
+      error: "Payment Required",
+      accepts: [{
+        scheme: "exact",
+        network: "base",
+        currency: "USDC",
+        amount: "0.002",
+        payTo: developerWallet
+      }]
+    }),
+    {
+      status: 402,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      }
+    }
+  );
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -30,11 +55,20 @@ export default {
       });
     }
 
-    if (url.pathname === "/verify") {
-      return await handleVerify(request, env, ctx);
-    }
+    if (url.pathname === "/verify" || 
+        (url.pathname === "/stamp" && request.method === "POST")) {
+      
+      const paymentHeader = request.headers.get(PAYMENT_HEADER);
+      const developerWallet = env.DEVELOPER_WALLET ?? "0x0000000000000000000000000000000000000000";
 
-    if (url.pathname === "/stamp" && request.method === "POST") {
+      if (!paymentHeader || paymentHeader.trim() === "") {
+        return payment402Response(developerWallet);
+      }
+
+      if (url.pathname === "/verify") {
+        return await handleVerify(request, env, ctx);
+      }
+
       return await handleStamp(request, env, ctx);
     }
 
