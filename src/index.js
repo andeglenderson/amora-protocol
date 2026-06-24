@@ -59,7 +59,7 @@ export default {
         (url.pathname === "/stamp" && request.method === "POST")) {
       
       const paymentHeader = request.headers.get(PAYMENT_HEADER);
-      const developerWallet = env.DEVELOPER_WALLET ?? "0x0000000000000000000000000000000000000000";
+      const developerWallet = env.SETTLEMENT_WALLET ?? "0x0000000000000000000000000000000000000000";
 
       if (!paymentHeader || paymentHeader.trim() === "") {
         return payment402Response(developerWallet);
