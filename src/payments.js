@@ -24,7 +24,7 @@ export async function verifyPayment(paymentHeader, paymentRequired, env) {
         },
         payload: paymentPayload.payload ?? paymentPayload
       },
-      paymentRequired: {
+      paymentRequirements: {
         scheme: paymentRequired.scheme,
         network: paymentRequired.network,
         asset: paymentRequired.asset,
