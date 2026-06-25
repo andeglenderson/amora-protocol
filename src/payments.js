@@ -1,4 +1,6 @@
 const FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402/verify";
+const FACILITATOR_HOST = "api.cdp.coinbase.com";
+const FACILITATOR_PATH = "/platform/v2/x402/verify";
 
 function b64url(buffer) {
   return btoa(String.fromCharCode(...new Uint8Array(buffer)))
@@ -7,16 +9,29 @@ function b64url(buffer) {
     .replace(/=+$/, "");
 }
 
+function randomHex(bytes) {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function generateBearerToken(apiKeyId, apiKeySecret) {
   const now = Math.floor(Date.now() / 1000);
 
-  const header = { alg: "EdDSA", kid: apiKeyId };
+  const header = {
+    alg: "EdDSA",
+    typ: "JWT",
+    kid: apiKeyId,
+    nonce: randomHex(16)
+  };
+
   const payload = {
-    iss: apiKeyId,
+    iss: "cdp",
     sub: apiKeyId,
+    aud: ["cdp_service"],
     nbf: now,
     exp: now + 120,
-    aud: ["cdp_service"]
+    uri: `POST ${FACILITATOR_HOST}${FACILITATOR_PATH}`
   };
 
   const headerB64 = b64url(new TextEncoder().encode(JSON.stringify(header)));
@@ -24,11 +39,8 @@ async function generateBearerToken(apiKeyId, apiKeySecret) {
   const signingInput = `${headerB64}.${payloadB64}`;
 
   const keyBytes = Uint8Array.from(atob(apiKeySecret), (c) => c.charCodeAt(0));
-
-  // Extract private seed — first 32 bytes of the 64-byte keypair
   const seedOnly = keyBytes.slice(0, 32);
 
-  // PKCS8 ASN.1 wrapper for 32-byte Ed25519 private seed
   const pkcs8Header = new Uint8Array([
     0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06,
     0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20
