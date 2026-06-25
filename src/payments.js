@@ -1,141 +1,61 @@
-import { handleVerify } from './c2pa.js';
-import { handleStamp } from './notary.js';
-import { verifyPayment } from './payments.js';
+const FACILITATOR_URL = "https://x402.org/facilitator/verify";
 
-const PAYMENT_HEADER = 'X-PAYMENT';
+export async function verifyPayment(paymentHeader, paymentRequired, env) {
+  try {
+    let paymentPayload;
+    try {
+      paymentPayload = JSON.parse(atob(paymentHeader));
+    } catch {
+      return { valid: false, error: "Malformed payment header" };
+    }
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "X-PAYMENT, Content-Type"
-};
-
-function payment402Response(developerWallet) {
-  return new Response(
-    JSON.stringify({
+    const body = {
       x402Version: 2,
-      error: "Payment Required",
-      accepts: [{
-        scheme: "exact",
-        network: "eip155:84532",
-        asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-        currency: "USDC",
-        amount: "2000",
-        payTo: developerWallet,
-        maxTimeoutSeconds: 60,
-        extra: { name: "USDC", version: "2" }
-      }]
-    }),
-    {
-      status: 402,
+      paymentPayload: {
+        x402Version: 2,
+        accepted: {
+          scheme: paymentRequired.scheme,
+          network: paymentRequired.network,
+          asset: paymentRequired.asset,
+          amount: paymentRequired.amount,
+          payTo: paymentRequired.payTo,
+          maxTimeoutSeconds: paymentRequired.maxTimeoutSeconds,
+          extra: paymentRequired.extra
+        },
+        payload: paymentPayload.payload ?? paymentPayload
+      },
+      paymentRequirements: {
+        scheme: paymentRequired.scheme,
+        network: paymentRequired.network,
+        asset: paymentRequired.asset,
+        amount: paymentRequired.amount,
+        payTo: paymentRequired.payTo,
+        maxTimeoutSeconds: paymentRequired.maxTimeoutSeconds,
+        extra: paymentRequired.extra
+      }
+    };
+
+    const response = await fetch(FACILITATOR_URL, {
+      method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        ...CORS_HEADERS
-      }
-    }
-  );
-}
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
 
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: CORS_HEADERS
-      });
+    if (!response.ok) {
+      const err = await response.text();
+      return { valid: false, error: `Facilitator error: ${response.status} ${err}` };
     }
 
-    if (url.pathname === "/health" || url.pathname === "/") {
-      return new Response(
-        JSON.stringify({
-          status: "healthy",
-          runtime: "v8-edge-isolate",
-          gateways: ["/verify", "/stamp"],
-          network: "Base Sepolia (testnet)"
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            ...CORS_HEADERS
-          }
-        }
-      );
-    }
+    const result = await response.json();
+    return {
+      valid: result.isValid === true,
+      payer: result.payer ?? null,
+      error: result.invalidReason ?? null
+    };
 
-    if (url.pathname === "/openapi.json") {
-      const res = await fetch(
-        "https://raw.githubusercontent.com/andeglenderson/amora-protocol/main/openapi.json"
-      );
-      const spec = await res.text();
-      return new Response(spec, {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          ...CORS_HEADERS
-        }
-      });
-    }
-
-    if (url.pathname === "/verify" ||
-        (url.pathname === "/stamp" && request.method === "POST")) {
-
-      const paymentHeader = request.headers.get(PAYMENT_HEADER);
-      const developerWallet = env.SETTLEMENT_WALLET ?? "0x0000000000000000000000000000000000000000";
-
-      if (!paymentHeader || paymentHeader.trim() === "") {
-        return payment402Response(developerWallet);
-      }
-
-      const paymentRequired = {
-        scheme: "exact",
-        network: "eip155:84532",
-        asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-        amount: "2000",
-        payTo: developerWallet,
-        maxTimeoutSeconds: 60,
-        extra: { name: "USDC", version: "2" }
-      };
-
-      const verification = await verifyPayment(paymentHeader, paymentRequired, env);
-
-      if (!verification.valid) {
-        return new Response(
-          JSON.stringify({
-            error: "Payment verification failed",
-            reason: verification.error
-          }),
-          {
-            status: 402,
-            headers: {
-              "Content-Type": "application/json",
-              ...CORS_HEADERS
-            }
-          }
-        );
-      }
-
-      if (url.pathname === "/verify") {
-        return await handleVerify(request, env, ctx);
-      }
-
-      return await handleStamp(request, env, ctx);
-    }
-
-    return new Response(
-      JSON.stringify({
-        error: "Not Found",
-        message: "Resource does not exist or method is invalid."
-      }),
-      {
-        status: 404,
-        headers: {
-          "Content-Type": "application/json",
-          ...CORS_HEADERS
-        }
-      }
-    );
+  } catch (err) {
+    return { valid: false, error: err.message };
   }
-};
+}
