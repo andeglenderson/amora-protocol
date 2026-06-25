@@ -24,11 +24,23 @@ async function generateBearerToken(apiKeyId, apiKeySecret) {
   const signingInput = `${headerB64}.${payloadB64}`;
 
   const keyBytes = Uint8Array.from(atob(apiKeySecret), (c) => c.charCodeAt(0));
-  const seedBytes = keyBytes.slice(0, 32);
+
+  // Extract private seed — first 32 bytes of the 64-byte keypair
+  const seedOnly = keyBytes.slice(0, 32);
+
+  // PKCS8 ASN.1 wrapper for 32-byte Ed25519 private seed
+  const pkcs8Header = new Uint8Array([
+    0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06,
+    0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20
+  ]);
+
+  const pkcs8Bytes = new Uint8Array(pkcs8Header.length + seedOnly.length);
+  pkcs8Bytes.set(pkcs8Header);
+  pkcs8Bytes.set(seedOnly, pkcs8Header.length);
 
   const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    seedBytes,
+    "pkcs8",
+    pkcs8Bytes,
     { name: "Ed25519" },
     false,
     ["sign"]
