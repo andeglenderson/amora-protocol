@@ -13,14 +13,17 @@ const CORS_HEADERS = {
 function payment402Response(developerWallet) {
   return new Response(
     JSON.stringify({
-      x402Version: 1,
+      x402Version: 2,
       error: "Payment Required",
       accepts: [{
         scheme: "exact",
-        network: "eip155:8453",
+        network: "eip155:84532",
+        asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
         currency: "USDC",
-        amount: "0.002",
-        payTo: developerWallet
+        amount: "2000",
+        payTo: developerWallet,
+        maxTimeoutSeconds: 60,
+        extra: { name: "USDC", version: "2" }
       }]
     }),
     {
@@ -49,7 +52,8 @@ export default {
         JSON.stringify({
           status: "healthy",
           runtime: "v8-edge-isolate",
-          gateways: ["/verify", "/stamp"]
+          gateways: ["/verify", "/stamp"],
+          network: "Base Sepolia (testnet)"
         }),
         {
           status: 200,
@@ -87,9 +91,9 @@ export default {
 
       const paymentRequired = {
         scheme: "exact",
-        network: "eip155:8453",
-        asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        amount: env.X402_PRICE_FLOOR ?? "2000",
+        network: "eip155:84532",
+        asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        amount: "2000",
         payTo: developerWallet,
         maxTimeoutSeconds: 60,
         extra: { name: "USDC", version: "2" }
