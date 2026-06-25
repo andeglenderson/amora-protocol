@@ -81,10 +81,31 @@ export async function verifyPayment(paymentHeader, paymentRequired, env) {
       return { valid: false, error: "Malformed payment header" };
     }
 
+    // x402Version 2 structure
     const body = {
-      x402Version: 1,
-      paymentPayload,
-      paymentRequired
+      x402Version: 2,
+      paymentPayload: {
+        x402Version: 2,
+        accepted: {
+          scheme: paymentRequired.scheme,
+          network: paymentRequired.network,
+          asset: paymentRequired.asset,
+          amount: paymentRequired.amount,
+          payTo: paymentRequired.payTo,
+          maxTimeoutSeconds: paymentRequired.maxTimeoutSeconds,
+          extra: paymentRequired.extra
+        },
+        payload: paymentPayload.payload ?? paymentPayload
+      },
+      paymentRequired: {
+        scheme: paymentRequired.scheme,
+        network: paymentRequired.network,
+        asset: paymentRequired.asset,
+        amount: paymentRequired.amount,
+        payTo: paymentRequired.payTo,
+        maxTimeoutSeconds: paymentRequired.maxTimeoutSeconds,
+        extra: paymentRequired.extra
+      }
     };
 
     const response = await fetch(FACILITATOR_URL, {
