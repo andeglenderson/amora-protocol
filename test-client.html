@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Amora Protocol — x402 Test Client</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+    header { margin-bottom: 32px; }
+    header h1 { font-size: 1.2rem; font-weight: 600; color: #fff; }
+    header p { font-size: 0.8rem; color: #666; margin-top: 4px; }
+    .card {
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .card h2 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 14px;
+    }
+    .btn {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #ccc;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      width: 100%;
+      text-align: center;
+    }
+    .btn:hover { border-color: #555; color: #fff; }
+    .btn-primary {
+      background: #0f2d1a;
+      border-color: #166534;
+      color: #4ade80;
+    }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 10px 0;
+      border-bottom: 1px solid #1e1e1e;
+      font-size: 0.8rem;
+    }
+    .result-row:last-child { border-bottom: none; }
+    .result-label { color: #666; flex-shrink: 0; margin-right: 12px; }
+    .result-value { color: #ccc; text-align: right; word-break: break-all; }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .badge-ok { background: #0f2d1a; color: #4ade80; border: 1px solid #166534; }
+    .badge-err { background: #2d0f0f; color: #f87171; border: 1px solid #991b1b; }
+    .badge-warn { background: #2d2000; color: #fbbf24; border: 1px solid #92400e; }
+    .json-block {
+      background: #0d0d0d;
+      border: 1px solid #1e1e1e;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.7rem;
+      color: #4ade80;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 12px;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid #1e1e1e;
+      font-size: 0.8rem;
+    }
+    .step:last-child { border-bottom: none; }
+    .step-num {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem;
+      color: #666;
+      flex-shrink: 0;
+    }
+    .step-num.done { background: #0f2d1a; border-color: #166534; color: #4ade80; }
+    .step-num.active { background: #2d2000; border-color: #92400e; color: #fbbf24; }
+    .step-num.err { background: #2d0f0f; border-color: #991b1b; color: #f87171; }
+    .spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid #333;
+      border-top-color: #fbbf24;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    footer {
+      margin-top: 32px;
+      font-size: 0.7rem;
+      color: #444;
+      text-align: center;
+    }
+    footer a { color: #555; }
+    #run-btn { margin-bottom: 16px; }
+    #results { display: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Amora Protocol</h1>
+  <p>x402 End-to-End Test Client — simulated payment flow</p>
+</header>
+
+<div class="card">
+  <h2>Test Configuration</h2>
+  <div class="result-row">
+    <span class="result-label">Gateway</span>
+    <span class="result-value">x402-dual-gateway.andeglenderson.workers.dev</span>
+  </div>
+  <div class="result-row">
+    <span class="result-label">Endpoint</span>
+    <span class="result-value">/verify</span>
+  </div>
+  <div class="result-row">
+    <span class="result-label">Mode</span>
+    <span class="result-value"><span class="badge badge-warn">Simulated payment</span></span>
+  </div>
+  <div class="result-row">
+    <span class="result-label">Network</span>
+    <span class="result-value">Base Mainnet (eip155:8453)</span>
+  </div>
+</div>
+
+<button class="btn btn-primary" id="run-btn" onclick="runTest()">
+  Run End-to-End Test
+</button>
+
+<div class="card" id="progress-card">
+  <h2>Flow Progress</h2>
+  <div class="step">
+    <div class="step-num" id="s1">1</div>
+    <span id="s1-label">Trigger 402 challenge from gateway</span>
+  </div>
+  <div class="step">
+    <div class="step-num" id="s2">2</div>
+    <span id="s2-label">Construct simulated x402 payment payload</span>
+  </div>
+  <div class="step">
+    <div class="step-num" id="s3">3</div>
+    <span id="s3-label">Submit payment header to /verify</span>
+  </div>
+  <div class="step">
+    <div class="step-num" id="s4">4</div>
+    <span id="s4-label">Display verification response</span>
+  </div>
+</div>
+
+<div class="card" id="results">
+  <h2>Result</h2>
+  <div id="summary"></div>
+  <div class="json-block" id="jsonBlock"></div>
+</div>
+
+<footer>
+  <a href="https://x402-dual-gateway.andeglenderson.workers.dev" target="_blank">
+    x402-dual-gateway.andeglenderson.workers.dev
+  </a>
+  &nbsp;·&nbsp; Built on Cloudflare Workers &nbsp;·&nbsp; Settles in USDC on Base
+</footer>
+
+<script>
+const GATEWAY = "https://x402-dual-gateway.andeglenderson.workers.dev";
+const TEST_ASSET = "https://raw.githubusercontent.com/c2pa-org/public-testfiles/main/image/jpeg/adobe-20220124-C.jpg";
+
+function setStep(n, state, label) {
+  const el = document.getElementById(`s${n}`);
+  const labelEl = document.getElementById(`s${n}-label`);
+  el.className = `step-num ${state}`;
+  if (state === 'active') el.innerHTML = '<span class="spinner"></span>';
+  else if (state === 'done') el.textContent = '✓';
+  else if (state === 'err') el.textContent = '✗';
+  else el.textContent = n;
+  if (label) labelEl.textContent = label;
+}
+
+function showResult(ok, summary, raw) {
+  const el = document.getElementById('results');
+  const summaryEl = document.getElementById('summary');
+  const jsonEl = document.getElementById('jsonBlock');
+  el.style.display = 'block';
+
+  summaryEl.innerHTML = `
+    <div class="result-row">
+      <span class="result-label">Status</span>
+      <span class="result-value">
+        <span class="badge ${ok ? 'badge-ok' : 'badge-err'}">
+          ${ok ? '✓ Flow completed' : '✗ Flow failed'}
+        </span>
+      </span>
+    </div>
+    ${summary}
+  `;
+  jsonEl.textContent = JSON.stringify(raw, null, 2);
+}
+
+async function runTest() {
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('results').style.display = 'none';
+
+  // Reset steps
+  for (let i = 1; i <= 4; i++) setStep(i, '', null);
+
+  try {
+    // Step 1: Trigger 402 challenge
+    setStep(1, 'active', 'Triggering 402 challenge...');
+    const challengeRes = await fetch(`${GATEWAY}/verify?asset=${encodeURIComponent(TEST_ASSET)}`);
+    const challenge = await challengeRes.json();
+
+    if (challengeRes.status !== 402) {
+      setStep(1, 'err', `Expected 402, got ${challengeRes.status}`);
+      showResult(false, `<div class="result-row"><span class="result-label">Error</span><span class="result-value">Gateway did not return 402</span></div>`, challenge);
+      document.getElementById('run-btn').disabled = false;
+      return;
+    }
+    setStep(1, 'done', `402 received — payTo: ${challenge.accepts?.[0]?.payTo?.slice(0,10)}...`);
+
+    // Step 2: Construct simulated payment payload
+    setStep(2, 'active', 'Building simulated payment payload...');
+    await new Promise(r => setTimeout(r, 500));
+
+    const accepts = challenge.accepts?.[0];
+    const simulatedPayload = {
+      x402Version: 1,
+      scheme: accepts?.scheme ?? "exact",
+      network: accepts?.network ?? "eip155:8453",
+      payload: {
+        signature: "0xSIMULATED_SIGNATURE_NOT_A_REAL_TRANSACTION",
+        authorization: {
+          from: "0x0000000000000000000000000000000000000001",
+          to: accepts?.payTo ?? "0x0",
+          value: accepts?.amount ?? "2000",
+          validAfter: Math.floor(Date.now() / 1000) - 10,
+          validBefore: Math.floor(Date.now() / 1000) + 300,
+          nonce: "0x" + Math.random().toString(16).slice(2).padStart(64, '0')
+        }
+      }
+    };
+
+    const paymentHeader = btoa(JSON.stringify(simulatedPayload));
+    setStep(2, 'done', 'Simulated payload constructed');
+
+    // Step 3: Submit to /verify with payment header
+    setStep(3, 'active', 'Submitting to /verify...');
+    const verifyRes = await fetch(`${GATEWAY}/verify?asset=${encodeURIComponent(TEST_ASSET)}`, {
+      headers: { 'X-PAYMENT': paymentHeader }
+    });
+    const verifyData = await verifyRes.json();
+    setStep(3, 'done', `Response: HTTP ${verifyRes.status}`);
+
+    // Step 4: Display result
+    setStep(4, 'active', 'Processing response...');
+    await new Promise(r => setTimeout(r, 300));
+    setStep(4, 'done', 'Complete');
+
+    const isPaymentVerified = verifyRes.status !== 402;
+    const summary = `
+      <div class="result-row">
+        <span class="result-label">HTTP Status</span>
+        <span class="result-value">${verifyRes.status}</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Payment gate</span>
+        <span class="result-value">
+          <span class="badge ${isPaymentVerified ? 'badge-ok' : 'badge-warn'}">
+            ${isPaymentVerified ? 'Passed' : 'Rejected (expected for simulated)'}
+          </span>
+        </span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Note</span>
+        <span class="result-value">Simulated payload — real transaction required for mainnet clearance</span>
+      </div>
+    `;
+
+    showResult(true, summary, verifyData);
+
+  } catch (err) {
+    showResult(false, `<div class="result-row"><span class="result-label">Error</span><span class="result-value">${err.message}</span></div>`, {});
+  }
+
+  document.getElementById('run-btn').disabled = false;
+}
+</script>
+
+</body>
+</html>
