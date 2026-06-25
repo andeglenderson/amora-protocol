@@ -4,6 +4,12 @@ import { verifyPayment } from './payments.js';
 
 const PAYMENT_HEADER = 'X-PAYMENT';
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "X-PAYMENT, Content-Type"
+};
+
 function payment402Response(developerWallet) {
   return new Response(
     JSON.stringify({
@@ -21,7 +27,7 @@ function payment402Response(developerWallet) {
       status: 402,
       headers: {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
+        ...CORS_HEADERS
       }
     }
   );
@@ -31,6 +37,13 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: CORS_HEADERS
+      });
+    }
+
     if (url.pathname === "/health" || url.pathname === "/") {
       return new Response(
         JSON.stringify({
@@ -38,7 +51,13 @@ export default {
           runtime: "v8-edge-isolate",
           gateways: ["/verify", "/stamp"]
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            ...CORS_HEADERS
+          }
+        }
       );
     }
 
@@ -51,7 +70,7 @@ export default {
         status: 200,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
+          ...CORS_HEADERS
         }
       });
     }
@@ -84,7 +103,13 @@ export default {
             error: "Payment verification failed",
             reason: verification.error
           }),
-          { status: 402, headers: { "Content-Type": "application/json" } }
+          {
+            status: 402,
+            headers: {
+              "Content-Type": "application/json",
+              ...CORS_HEADERS
+            }
+          }
         );
       }
 
@@ -100,7 +125,13 @@ export default {
         error: "Not Found",
         message: "Resource does not exist or method is invalid."
       }),
-      { status: 404, headers: { "Content-Type": "application/json" } }
+      {
+        status: 404,
+        headers: {
+          "Content-Type": "application/json",
+          ...CORS_HEADERS
+        }
+      }
     );
   }
 };
