@@ -17,8 +17,8 @@ function payment402Response(developerWallet) {
       error: "Payment Required",
       accepts: [{
         scheme: "exact",
-        network: "eip155:84532",
-        asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        network: "eip155:8453",
+        asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         currency: "USDC",
         amount: "2000",
         payTo: developerWallet,
@@ -53,7 +53,7 @@ export default {
           status: "healthy",
           runtime: "v8-edge-isolate",
           gateways: ["/verify", "/stamp"],
-          network: "Base Sepolia (testnet)"
+          network: "Base Mainnet"
         }),
         {
           status: 200,
@@ -91,8 +91,8 @@ export default {
 
       const paymentRequired = {
         scheme: "exact",
-        network: "eip155:84532",
-        asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        network: "eip155:8453",
+        asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         amount: "2000",
         payTo: developerWallet,
         maxTimeoutSeconds: 60,
