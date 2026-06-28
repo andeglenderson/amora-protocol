@@ -89,8 +89,8 @@ export async function verifyPayment(paymentHeader, paymentRequired, env) {
     };
 
     const jwt = await generateCdpJwt(
-      env.CDP_API_KEY_ID ?? "a5a77625-81cf-4187-a610-7df6b11d41ab",
-      env.CDP_API_KEY_SECRET ?? "hOc47FCq9us+9W20xom1zXBjQ0y7V2HNTtMahwQBgVByNMdcHt8DNXa4FmbIDFu/b4uY4hAL9VppEEgGAopdVw=="
+      env.CDP_API_KEY_ID,
+      env.CDP_API_KEY_SECRET
     );
 
     const response = await fetch(FACILITATOR_URL, {
