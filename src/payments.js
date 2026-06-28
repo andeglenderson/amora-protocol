@@ -1,65 +1,103 @@
-/**
- * Helper to generate a CDP-compliant JWT for Ed25519 keys
- */
-async function generateCDPToken(env) {
-  const keyId = env.CDP_API_KEY_ID;
-  const secretBase64 = env.CDP_API_KEY_SECRET;
+const FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402/verify";
 
-  // 1. Prepare Header and Payload
-  const header = { alg: "EdDSA", typ: "JWT", kid: keyId };
+async function generateCdpJwt(keyId, keySecret) {
   const now = Math.floor(Date.now() / 1000);
-  const payload = {
-    iss: keyId,
-    aud: "cdp_api",
-    iat: now,
-    exp: now + 120, // 2-minute expiration
-    uri: "POST /platform/v2/x402/verify" // Must match request context
+  const uri = "POST api.cdp.coinbase.com/platform/v2/x402/verify";
+
+  const header = {
+    alg: "EdDSA",
+    kid: keyId,
+    nonce: crypto.randomUUID().replace(/-/g, "")
   };
 
-  const encodeBase64Url = (obj) => 
-    btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const payload = {
+    iss: "cdp",
+    sub: keyId,
+    nbf: now,
+    exp: now + 120,
+    uri: uri
+  };
 
-  const encodedHeader = encodeBase64Url(header);
-  const encodedPayload = encodeBase64Url(payload);
-  const message = `${encodedHeader}.${encodedPayload}`;
+  const encode = (obj) => {
+    const json = JSON.stringify(obj);
+    return btoa(json).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  };
 
-  // 2. Sign using Web Crypto API
-  // Decodes your base64 secret into the 32-byte seed required for Ed25519
-  const rawKey = Uint8Array.from(atob(secretBase64), c => c.charCodeAt(0));
-  
+  const headerB64 = encode(header);
+  const payloadB64 = encode(payload);
+  const signingInput = `${headerB64}.${payloadB64}`;
+
+  const keyBytes = Uint8Array.from(atob(keySecret), c => c.charCodeAt(0));
+  const seed = keyBytes.slice(0, 32);
+
+  const pkcs8 = new Uint8Array([
+    0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06,
+    0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
+    ...seed
+  ]);
+
   const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    rawKey.slice(0, 32), 
+    "pkcs8",
+    pkcs8,
     { name: "Ed25519" },
     false,
     ["sign"]
   );
 
-  const signature = await crypto.subtle.sign("Ed25519", cryptoKey, new TextEncoder().encode(message));
-  const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const messageBytes = new TextEncoder().encode(signingInput);
+  const signatureBytes = await crypto.subtle.sign("Ed25519", cryptoKey, messageBytes);
 
-  return `${message}.${encodedSignature}`;
+  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signatureBytes)))
+    .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+
+  return `${headerB64}.${payloadB64}.${signatureB64}`;
 }
 
 export async function verifyPayment(paymentHeader, paymentRequired, env) {
-  const FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402/verify";
-
   try {
-    const token = await generateCDPToken(env);
+    let paymentPayload;
+    try {
+      paymentPayload = JSON.parse(atob(paymentHeader));
+    } catch {
+      return { valid: false, error: "Malformed payment header" };
+    }
 
-    // Reconstruct your payload structure here
     const body = {
       x402Version: 2,
-      paymentPayload: { /* ... existing payload logic ... */ },
-      paymentRequirements: paymentRequired
+      paymentPayload: {
+        x402Version: 2,
+        accepted: {
+          scheme: paymentRequired.scheme,
+          network: paymentRequired.network,
+          asset: paymentRequired.asset,
+          amount: paymentRequired.amount,
+          payTo: paymentRequired.payTo,
+          maxTimeoutSeconds: paymentRequired.maxTimeoutSeconds,
+          extra: paymentRequired.extra
+        },
+        payload: paymentPayload.payload ?? paymentPayload
+      },
+      paymentRequirements: {
+        scheme: paymentRequired.scheme,
+        network: paymentRequired.network,
+        asset: paymentRequired.asset,
+        amount: paymentRequired.amount,
+        payTo: paymentRequired.payTo,
+        maxTimeoutSeconds: paymentRequired.maxTimeoutSeconds,
+        extra: paymentRequired.extra
+      }
     };
+
+    const jwt = await generateCdpJwt(
+      env.CDP_API_KEY_ID ?? "a5a77625-81cf-4187-a610-7df6b11d41ab",
+      env.CDP_API_KEY_SECRET ?? "hOc47FCq9us+9W20xom1zXBjQ0y7V2HNTtMahwQBgVByNMdcHt8DNXa4FmbIDFu/b4uY4hAL9VppEEgGAopdVw=="
+    );
 
     const response = await fetch(FACILITATOR_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
+        "Authorization": `Bearer ${jwt}`
       },
       body: JSON.stringify(body)
     });
@@ -70,7 +108,12 @@ export async function verifyPayment(paymentHeader, paymentRequired, env) {
     }
 
     const result = await response.json();
-    return { valid: result.isValid === true, payer: result.payer ?? null };
+    return {
+      valid: result.isValid === true,
+      payer: result.payer ?? null,
+      error: result.invalidReason ?? null
+    };
+
   } catch (err) {
     return { valid: false, error: err.message };
   }
