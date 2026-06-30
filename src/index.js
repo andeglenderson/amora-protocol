@@ -10,6 +10,41 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "X-PAYMENT, Content-Type"
 };
 
+const SERVER_CARD = {
+  "$schema": "https://schemas.modelcontextprotocol.io/server-card/v1.json",
+  "version": "1.0.0",
+  "protocolVersion": "2025-11-25",
+  "serverInfo": {
+    "name": "amora-protocol",
+    "title": "Amora Protocol",
+    "description": "x402-gated C2PA content provenance verification and content notarization. Agents pay per-call in USDC on Base Mainnet to access verification tools.",
+    "homepage": "https://github.com/andeglenderson/amora-protocol"
+  },
+  "transport": {
+    "type": "streamable-http",
+    "url": "https://x402-dual-gateway.andeglenderson.workers.dev"
+  },
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false
+  },
+  "tools": [
+    {
+      "name": "verify_provenance",
+      "description": "Verify C2PA content provenance manifest for a media asset. Requires x402 payment of 2000 USDC base units per call.",
+      "endpoint": "/verify",
+      "method": "GET"
+    },
+    {
+      "name": "notarize_content",
+      "description": "Generate timestamped cryptographic attestation for arbitrary content without inspecting it. Requires x402 payment of 2000 USDC base units per call.",
+      "endpoint": "/stamp",
+      "method": "POST"
+    }
+  ]
+};
+
 function payment402Response(developerWallet) {
   return new Response(
     JSON.stringify({
@@ -44,6 +79,16 @@ export default {
       return new Response(null, {
         status: 204,
         headers: CORS_HEADERS
+      });
+    }
+
+    if (url.pathname === "/.well-known/mcp/server-card.json") {
+      return new Response(JSON.stringify(SERVER_CARD), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...CORS_HEADERS
+        }
       });
     }
 
