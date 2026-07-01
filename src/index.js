@@ -124,8 +124,7 @@ export default {
       });
     }
 
-    if (url.pathname === "/verify" ||
-        (url.pathname === "/stamp" && request.method === "POST")) {
+    if (url.pathname === "/verify" || url.pathname === "/stamp") {
 
       const paymentHeader = request.headers.get(PAYMENT_HEADER);
       const developerWallet = env.SETTLEMENT_WALLET ?? "0x0000000000000000000000000000000000000000";
