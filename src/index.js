@@ -1,6 +1,6 @@
 import { handleVerify } from './c2pa.js';
 import { handleStamp } from './notary.js';
-import { verifyPayment } from './payments.js';
+import { verifyPayment, logLedgerEntry, logSettlementFailure } from './payments.js';
 
 const PAYMENT_HEADER = 'X-PAYMENT';
 
@@ -145,7 +145,30 @@ export default {
 
       const verification = await verifyPayment(paymentHeader, paymentRequired, env);
 
+      // Determine assetRef for ledger logging. /verify uses a query param;
+      // /stamp uses a JSON body field. Clone the request for /stamp so
+      // handleStamp can still read the body itself afterward.
+      let assetRef = null;
+
+      if (url.pathname === "/verify") {
+        assetRef = url.searchParams.get("asset");
+      } else if (url.pathname === "/stamp") {
+        try {
+          const clonedRequest = request.clone();
+          const body = await clonedRequest.json();
+          assetRef = body.targetHash ?? null;
+        } catch {
+          assetRef = null;
+        }
+      }
+
+      const tier = url.pathname === "/verify" ? "verify" : "stamp";
+
       if (!verification.valid) {
+        ctx.waitUntil(
+          logSettlementFailure({ tier, assetRef, error: verification.error }, env)
+        );
+
         return new Response(
           JSON.stringify({
             error: "Payment verification failed",
@@ -160,6 +183,12 @@ export default {
           }
         );
       }
+
+      // Log the successful settlement in the background — never blocks
+      // the response back to the agent.
+      ctx.waitUntil(
+        logLedgerEntry({ tier, assetRef, amount: "2000" }, env)
+      );
 
       if (url.pathname === "/verify") {
         return await handleVerify(request, env, ctx);
