@@ -1,4 +1,5 @@
 const FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402/verify";
+const LEDGER_REPO = "andeglenderson/amora-protocol"; // owner/repo
 
 async function generateCdpJwt(keyId, keySecret) {
   const now = Math.floor(Date.now() / 1000);
@@ -117,4 +118,73 @@ export async function verifyPayment(paymentHeader, paymentRequired, env) {
   } catch (err) {
     return { valid: false, error: err.message };
   }
+}
+
+// --- LEDGER DISPATCH ---
+// Fires a repository_dispatch event so ledger-sync.yml can record the
+// transaction. Always called via ctx.waitUntil() from index.js so it never
+// blocks the response back to the agent.
+
+async function dispatchToGitHub(eventType, clientPayload, env) {
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${LEDGER_REPO}/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          "Accept": "application/vnd.github+json",
+          "Authorization": `Bearer ${env.GITHUB_LEDGER_TOKEN}`,
+          "User-Agent": "Amora-Gateway-Isolate",
+          "X-GitHub-Api-Version": "2022-11-28"
+        },
+        body: JSON.stringify({
+          event_type: eventType,
+          client_payload: clientPayload
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`Ledger dispatch failed: ${response.status} ${errText}`);
+    }
+  } catch (err) {
+    // Ledger failures must never surface to the agent or affect the
+    // response they already received — log and move on.
+    console.error("Ledger dispatch error:", err.message);
+  }
+}
+
+/**
+ * Call after a successful payment verification.
+ * tier: "verify" | "stamp" (matches endpoint name — no shallow/deep split yet)
+ * assetRef: the `asset` query param for /verify, or `targetHash` for /stamp
+ * amount: the settled amount in USDC base units (string, e.g. "2000")
+ */
+export async function logLedgerEntry({ tier, assetRef, amount }, env) {
+  await dispatchToGitHub(
+    "ledger_entry",
+    {
+      tier,
+      assetRef: assetRef ?? "unknown",
+      settlement: { amount: amount ?? "2000" }
+    },
+    env
+  );
+}
+
+/**
+ * Call when payment verification fails, so the failure is recorded as a
+ * GitHub Issue via ledger-sync.yml's Branch B.
+ */
+export async function logSettlementFailure({ tier, assetRef, error }, env) {
+  await dispatchToGitHub(
+    "settlement_failure",
+    {
+      tier,
+      assetRef: assetRef ?? "unknown",
+      error: error ?? "Unknown verification failure"
+    },
+    env
+  );
 }
