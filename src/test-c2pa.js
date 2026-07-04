@@ -1,29 +1,17 @@
 // TEST ONLY — throwaway route, not part of production Amora logic.
 // Purpose: confirm @trustnxt/c2pa-ts loads and runs inside a Cloudflare
-// Worker, against a real C2PA-signed test image. Nothing here touches
-// payments, the ledger, or /verify. Delete this route once the test
-// is complete either way.
+// Worker, against a real C2PA-signed test image.
 //
-// SETUP (run once, from GitHub mobile or wherever you edit package.json):
-//   Add to package.json dependencies:  "@trustnxt/c2pa-ts": "latest"
-//   Cloudflare Workers builds via Wrangler/esbuild, which reads
-//   package.json automatically on deploy — no separate install step
-//   needed on your end beyond committing the dependency.
-//
-// ADD THIS ROUTE to index.js (temporarily) inside the fetch handler,
-// anywhere before the /verify or /stamp checks:
-//
-//   if (url.pathname === "/test-c2pa") {
-//     return await testC2paParse();
-//   }
-//
-// Then deploy as usual via your existing GitHub Actions pipeline, and
-// hit it via reqbin:
-//   GET https://x402-dual-gateway.andeglenderson.workers.dev/test-c2pa
-// No X-PAYMENT header needed — this route bypasses payment entirely,
-// it's test-only.
+// NOTE: this library is early-stage and its API has changed between
+// versions (older: JPEG/PNG/BMFF classes with canRead(); current:
+// a single async createAsset() factory function). This version uses
+// the current documented API. If this still doesn't match what's
+// actually installed, the safest next move is the introspection
+// fallback described in the catch block below.
 
-import { Asset, JPEG } from '@trustnxt/c2pa-ts/asset';
+import { MalformedContentError } from '@trustnxt/c2pa-ts';
+import { createAsset } from '@trustnxt/c2pa-ts/asset';
+import { SuperBox } from '@trustnxt/c2pa-ts/jumbf';
 import { ManifestStore } from '@trustnxt/c2pa-ts/manifest';
 
 const TEST_IMAGE_URL =
@@ -49,20 +37,20 @@ export async function testC2paParse() {
     const buf = new Uint8Array(arrayBuffer);
     log.push(`Step 2: fetched ${buf.length} bytes.`);
 
-    if (!JPEG.canRead(buf)) {
+    let asset;
+    try {
+      asset = await createAsset(buf);
+      log.push('Step 3: createAsset() succeeded — format recognized.');
+    } catch (formatErr) {
       return jsonResponse({
-        step: 'format-check',
+        step: 'format-detection',
         success: false,
-        error: 'JPEG.canRead() returned false — library did not recognize the file format.',
+        error: `createAsset() failed: ${formatErr.message}`,
         log
       });
     }
-    log.push('Step 3: JPEG.canRead() confirmed valid JPEG structure.');
 
-    const asset = new JPEG(buf);
-    log.push('Step 4: Asset object constructed.');
-
-    const jumbf = asset.getManifestJUMBF();
+    const jumbf = await asset.getManifestJUMBF();
 
     if (!jumbf) {
       return jsonResponse({
@@ -72,29 +60,38 @@ export async function testC2paParse() {
         log
       });
     }
-    log.push(`Step 5: JUMBF manifest box found, ${jumbf.length} bytes.`);
+    log.push(`Step 4: JUMBF manifest box found, ${jumbf.length ?? 'unknown'} bytes.`);
 
-    // Attempt to parse the manifest store from the JUMBF box.
-    const manifestStore = ManifestStore.read(jumbf);
+    const superBox = SuperBox.fromBuffer(jumbf);
+    log.push('Step 5: SuperBox.fromBuffer() succeeded — JUMBF structure parsed.');
+
+    const manifestStore = ManifestStore.read(superBox);
     log.push('Step 6: ManifestStore.read() succeeded — manifest parsed.');
 
     return jsonResponse({
       step: 'complete',
       success: true,
       message: 'c2pa-ts successfully ran inside the Worker and parsed a real C2PA manifest.',
-      manifestSummary: {
-        manifestCount: manifestStore?.manifests?.length ?? 'unknown — inspect manually',
-      },
       log
     });
 
   } catch (err) {
+    // If this still fails on an import/API mismatch, the fastest way
+    // forward is introspection rather than another guess: temporarily
+    // replace this whole function body with:
+    //
+    //   import * as c2paAsset from '@trustnxt/c2pa-ts/asset';
+    //   return new Response(JSON.stringify(Object.keys(c2paAsset)));
+    //
+    // That will print the *actual* exported names this installed
+    // version provides, ending the guessing entirely.
     return jsonResponse({
       step: 'exception',
       success: false,
       error: err.message,
       stack: err.stack,
-      log
+      log,
+      hint: 'If this is an import/export mismatch, see the introspection comment in this catch block for a guess-free fix.'
     });
   }
 }
