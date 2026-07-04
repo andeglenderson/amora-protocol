@@ -1,6 +1,7 @@
 import { handleVerify } from './c2pa.js';
 import { handleStamp } from './notary.js';
 import { verifyPayment, logLedgerEntry, logSettlementFailure } from './payments.js';
+import { testC2paParse } from './test-c2pa.js';
 
 const PAYMENT_HEADER = 'X-PAYMENT';
 
@@ -80,6 +81,13 @@ export default {
         status: 204,
         headers: CORS_HEADERS
       });
+    }
+
+    // --- TEST ROUTE — throwaway, no payment required ---
+    // Confirms @trustnxt/c2pa-ts loads and runs inside this Worker.
+    // Remove this block once the experiment is complete.
+    if (url.pathname === "/test-c2pa") {
+      return await testC2paParse();
     }
 
     if (url.pathname === "/.well-known/mcp/server-card.json") {
