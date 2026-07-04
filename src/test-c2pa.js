@@ -1,18 +1,19 @@
 // TEST ONLY — throwaway route, not part of production Amora logic.
 // Purpose: confirm @trustnxt/c2pa-ts loads and runs inside a Cloudflare
-// Worker, against a real C2PA-signed test image.
+// Worker. Steps 1-7 (fetch through introspection) are confirmed working.
+// This version adds the actual validate() call, using the CONFIRMED
+// real method names from introspection: manifestStore.validate(asset)
+// and ValidationResult.fromError() as an error fallback.
 //
-// STATUS: parsing confirmed working (fetch -> createAsset -> JUMBF ->
-// SuperBox -> ManifestStore.read all succeed). This version adds a safe
-// introspection step to discover the actual validation API surface
-// (ValidationResult / ValidationStatusCode are confirmed to exist per
-// the library's own README usage example, but the exact method name
-// to trigger validation is not yet confirmed) rather than guessing a
-// method name and burning another deploy cycle on a wrong guess.
+// Test expectation: this specific file (adobe-20220124-CA.jpg) was
+// signed with Adobe's C2PA Tool TEST certificate, which the C2PA
+// testfiles project explicitly documents as NOT on the official trust
+// list. A correctly working trust-chain check should report
+// SigningCredentialTrusted as false/failed for this file.
 
 import { createAsset } from '@trustnxt/c2pa-ts/asset';
 import { SuperBox } from '@trustnxt/c2pa-ts/jumbf';
-import { ManifestStore, ValidationResult, ValidationStatusCode } from '@trustnxt/c2pa-ts/manifest';
+import { ManifestStore, ValidationResult } from '@trustnxt/c2pa-ts/manifest';
 
 const TEST_IMAGE_URL =
   'https://raw.githubusercontent.com/c2pa-org/public-testfiles/main/legacy/1.4/image/jpeg/adobe-20220124-CA.jpg';
@@ -23,130 +24,53 @@ export async function testC2paParse() {
   try {
     log.push('Step 1: fetching test image...');
     const res = await fetch(TEST_IMAGE_URL);
-
     if (!res.ok) {
-      return jsonResponse({
-        step: 'fetch',
-        success: false,
-        error: `Failed to fetch test image: ${res.status}`,
-        log
-      });
+      return jsonResponse({ step: 'fetch', success: false, error: `Failed to fetch: ${res.status}`, log });
     }
 
-    const arrayBuffer = await res.arrayBuffer();
-    const buf = new Uint8Array(arrayBuffer);
+    const buf = new Uint8Array(await res.arrayBuffer());
     log.push(`Step 2: fetched ${buf.length} bytes.`);
 
     const asset = await createAsset(buf);
-    log.push('Step 3: createAsset() succeeded — format recognized.');
+    log.push('Step 3: createAsset() succeeded.');
 
     const jumbf = await asset.getManifestJUMBF();
     if (!jumbf) {
-      return jsonResponse({
-        step: 'manifest-extraction',
-        success: false,
-        error: 'No embedded C2PA manifest (JUMBF box) found in this file.',
-        log
-      });
+      return jsonResponse({ step: 'manifest-extraction', success: false, error: 'No JUMBF box found.', log });
     }
-    log.push(`Step 4: JUMBF manifest box found, ${jumbf.length ?? 'unknown'} bytes.`);
+    log.push(`Step 4: JUMBF box found, ${jumbf.length ?? 'unknown'} bytes.`);
 
     const superBox = SuperBox.fromBuffer(jumbf);
-    log.push('Step 5: SuperBox.fromBuffer() succeeded — JUMBF structure parsed.');
+    log.push('Step 5: SuperBox.fromBuffer() succeeded.');
 
     const manifestStore = ManifestStore.read(superBox);
-    log.push('Step 6: ManifestStore.read() succeeded — manifest parsed.');
+    log.push('Step 6: ManifestStore.read() succeeded.');
 
-    // --- INTROSPECTION STEP ---
-    // Rather than guess a validate() method name, list what's actually
-    // available on the manifestStore instance and on the ManifestStore,
-    // ValidationResult, and ValidationStatusCode exports themselves.
-    const introspection = {};
-
+    // --- THE ACTUAL VALIDATION CALL ---
+    let validationResult;
     try {
-      introspection.manifestStoreInstanceMethods = Object.getOwnPropertyNames(
-        Object.getPrototypeOf(manifestStore)
-      );
-    } catch (e) {
-      introspection.manifestStoreInstanceMethodsError = e.message;
+      validationResult = await manifestStore.validate(asset);
+      log.push('Step 7: manifestStore.validate(asset) completed.');
+    } catch (validateErr) {
+      validationResult = ValidationResult.fromError(validateErr);
+      log.push(`Step 7: validate() threw, caught via ValidationResult.fromError(): ${validateErr.message}`);
     }
-
-    try {
-      introspection.manifestStoreOwnKeys = Object.keys(manifestStore);
-    } catch (e) {
-      introspection.manifestStoreOwnKeysError = e.message;
-    }
-
-    try {
-      introspection.ManifestStoreStaticMethods = Object.getOwnPropertyNames(ManifestStore);
-    } catch (e) {
-      introspection.ManifestStoreStaticMethodsError = e.message;
-    }
-
-    try {
-      introspection.ValidationResultKeys = ValidationResult
-        ? Object.getOwnPropertyNames(ValidationResult)
-        : 'ValidationResult is undefined';
-    } catch (e) {
-      introspection.ValidationResultKeysError = e.message;
-    }
-
-    try {
-      introspection.ValidationStatusCodeValues = ValidationStatusCode
-        ? Object.keys(ValidationStatusCode)
-        : 'ValidationStatusCode is undefined';
-    } catch (e) {
-      introspection.ValidationStatusCodeValuesError = e.message;
-    }
-
-    // Also try to see if there are manifests inside the store, and what
-    // shape a single manifest object has — useful for the next step
-    // (checking signer/certificate info) regardless of the validate()
-    // method name.
-    try {
-      const manifests = manifestStore.manifests ?? manifestStore.getManifests?.();
-      if (manifests) {
-        introspection.manifestsFound =
-          typeof manifests === 'object' ? Object.keys(manifests).length : 'not an object';
-        const firstManifest = Array.isArray(manifests)
-          ? manifests[0]
-          : Object.values(manifests)[0];
-        if (firstManifest) {
-          introspection.firstManifestInstanceMethods = Object.getOwnPropertyNames(
-            Object.getPrototypeOf(firstManifest)
-          );
-          introspection.firstManifestOwnKeys = Object.keys(firstManifest);
-        }
-      } else {
-        introspection.manifestsFound = 'no .manifests property or getManifests() found';
-      }
-    } catch (e) {
-      introspection.manifestsIntrospectionError = e.message;
-    }
-
-    log.push('Step 7: introspection complete — see introspection field.');
 
     return jsonResponse({
       step: 'complete',
       success: true,
-      message: 'c2pa-ts successfully ran inside the Worker and parsed a real C2PA manifest.',
-      introspection,
+      message: 'Validation call completed — see validationResult for trust/signature status.',
+      validationResult,
       log
     });
 
   } catch (err) {
-    return jsonResponse({
-      step: 'exception',
-      success: false,
-      error: err.message,
-      stack: err.stack,
-      log
-    });
+    return jsonResponse({ step: 'exception', success: false, error: err.message, stack: err.stack, log });
   }
 }
 
 function jsonResponse(obj) {
-  return new Response(JSON.stringify(obj, null, 2), {
+  return new Response(JSON.stringify(obj, (key, value) => (typeof value === 'bigint' ? value.toString() : value), 2), {
     status: 200,
     headers: { 'Content-Type': 'application/json' }
   });
