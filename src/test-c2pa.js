@@ -2,17 +2,17 @@
 // Purpose: confirm @trustnxt/c2pa-ts loads and runs inside a Cloudflare
 // Worker, against a real C2PA-signed test image.
 //
-// NOTE: this library is early-stage and its API has changed between
-// versions (older: JPEG/PNG/BMFF classes with canRead(); current:
-// a single async createAsset() factory function). This version uses
-// the current documented API. If this still doesn't match what's
-// actually installed, the safest next move is the introspection
-// fallback described in the catch block below.
+// STATUS: parsing confirmed working (fetch -> createAsset -> JUMBF ->
+// SuperBox -> ManifestStore.read all succeed). This version adds a safe
+// introspection step to discover the actual validation API surface
+// (ValidationResult / ValidationStatusCode are confirmed to exist per
+// the library's own README usage example, but the exact method name
+// to trigger validation is not yet confirmed) rather than guessing a
+// method name and burning another deploy cycle on a wrong guess.
 
-import { MalformedContentError } from '@trustnxt/c2pa-ts';
 import { createAsset } from '@trustnxt/c2pa-ts/asset';
 import { SuperBox } from '@trustnxt/c2pa-ts/jumbf';
-import { ManifestStore } from '@trustnxt/c2pa-ts/manifest';
+import { ManifestStore, ValidationResult, ValidationStatusCode } from '@trustnxt/c2pa-ts/manifest';
 
 const TEST_IMAGE_URL =
   'https://raw.githubusercontent.com/c2pa-org/public-testfiles/main/legacy/1.4/image/jpeg/adobe-20220124-CA.jpg';
@@ -37,21 +37,10 @@ export async function testC2paParse() {
     const buf = new Uint8Array(arrayBuffer);
     log.push(`Step 2: fetched ${buf.length} bytes.`);
 
-    let asset;
-    try {
-      asset = await createAsset(buf);
-      log.push('Step 3: createAsset() succeeded — format recognized.');
-    } catch (formatErr) {
-      return jsonResponse({
-        step: 'format-detection',
-        success: false,
-        error: `createAsset() failed: ${formatErr.message}`,
-        log
-      });
-    }
+    const asset = await createAsset(buf);
+    log.push('Step 3: createAsset() succeeded — format recognized.');
 
     const jumbf = await asset.getManifestJUMBF();
-
     if (!jumbf) {
       return jsonResponse({
         step: 'manifest-extraction',
@@ -68,30 +57,90 @@ export async function testC2paParse() {
     const manifestStore = ManifestStore.read(superBox);
     log.push('Step 6: ManifestStore.read() succeeded — manifest parsed.');
 
+    // --- INTROSPECTION STEP ---
+    // Rather than guess a validate() method name, list what's actually
+    // available on the manifestStore instance and on the ManifestStore,
+    // ValidationResult, and ValidationStatusCode exports themselves.
+    const introspection = {};
+
+    try {
+      introspection.manifestStoreInstanceMethods = Object.getOwnPropertyNames(
+        Object.getPrototypeOf(manifestStore)
+      );
+    } catch (e) {
+      introspection.manifestStoreInstanceMethodsError = e.message;
+    }
+
+    try {
+      introspection.manifestStoreOwnKeys = Object.keys(manifestStore);
+    } catch (e) {
+      introspection.manifestStoreOwnKeysError = e.message;
+    }
+
+    try {
+      introspection.ManifestStoreStaticMethods = Object.getOwnPropertyNames(ManifestStore);
+    } catch (e) {
+      introspection.ManifestStoreStaticMethodsError = e.message;
+    }
+
+    try {
+      introspection.ValidationResultKeys = ValidationResult
+        ? Object.getOwnPropertyNames(ValidationResult)
+        : 'ValidationResult is undefined';
+    } catch (e) {
+      introspection.ValidationResultKeysError = e.message;
+    }
+
+    try {
+      introspection.ValidationStatusCodeValues = ValidationStatusCode
+        ? Object.keys(ValidationStatusCode)
+        : 'ValidationStatusCode is undefined';
+    } catch (e) {
+      introspection.ValidationStatusCodeValuesError = e.message;
+    }
+
+    // Also try to see if there are manifests inside the store, and what
+    // shape a single manifest object has — useful for the next step
+    // (checking signer/certificate info) regardless of the validate()
+    // method name.
+    try {
+      const manifests = manifestStore.manifests ?? manifestStore.getManifests?.();
+      if (manifests) {
+        introspection.manifestsFound =
+          typeof manifests === 'object' ? Object.keys(manifests).length : 'not an object';
+        const firstManifest = Array.isArray(manifests)
+          ? manifests[0]
+          : Object.values(manifests)[0];
+        if (firstManifest) {
+          introspection.firstManifestInstanceMethods = Object.getOwnPropertyNames(
+            Object.getPrototypeOf(firstManifest)
+          );
+          introspection.firstManifestOwnKeys = Object.keys(firstManifest);
+        }
+      } else {
+        introspection.manifestsFound = 'no .manifests property or getManifests() found';
+      }
+    } catch (e) {
+      introspection.manifestsIntrospectionError = e.message;
+    }
+
+    log.push('Step 7: introspection complete — see introspection field.');
+
     return jsonResponse({
       step: 'complete',
       success: true,
       message: 'c2pa-ts successfully ran inside the Worker and parsed a real C2PA manifest.',
+      introspection,
       log
     });
 
   } catch (err) {
-    // If this still fails on an import/API mismatch, the fastest way
-    // forward is introspection rather than another guess: temporarily
-    // replace this whole function body with:
-    //
-    //   import * as c2paAsset from '@trustnxt/c2pa-ts/asset';
-    //   return new Response(JSON.stringify(Object.keys(c2paAsset)));
-    //
-    // That will print the *actual* exported names this installed
-    // version provides, ending the guessing entirely.
     return jsonResponse({
       step: 'exception',
       success: false,
       error: err.message,
       stack: err.stack,
-      log,
-      hint: 'If this is an import/export mismatch, see the introspection comment in this catch block for a guess-free fix.'
+      log
     });
   }
 }
