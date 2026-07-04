@@ -1,3 +1,4 @@
+import 'reflect-metadata'; // Required by tsyringe, a dependency of @trustnxt/c2pa-ts. Must load first.
 import { handleVerify } from './c2pa.js';
 import { handleStamp } from './notary.js';
 import { verifyPayment, logLedgerEntry, logSettlementFailure } from './payments.js';
