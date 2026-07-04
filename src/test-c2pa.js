@@ -15,7 +15,7 @@ import { SuperBox } from '@trustnxt/c2pa-ts/jumbf';
 import { ManifestStore } from '@trustnxt/c2pa-ts/manifest';
 
 const TEST_IMAGE_URL =
-  'https://raw.githubusercontent.com/c2pa-org/public-testfiles/main/legacy/1.4/image/jpeg/adobe-20220124-A.jpg';
+  'https://raw.githubusercontent.com/c2pa-org/public-testfiles/main/legacy/1.4/image/jpeg/adobe-20220124-CA.jpg';
 
 export async function testC2paParse() {
   const log = [];
