@@ -1,0 +1,8 @@
+{
+  "name": "x402-dual-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@trustnxt/c2pa-ts": "latest"
+  }
+}
