@@ -6,6 +6,16 @@ import { testC2paParse } from './test-c2pa.js';
 
 const PAYMENT_HEADER = 'X-PAYMENT';
 
+// ==========================================================================
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TEMPORARY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// TEMPORARY TEST BYPASS — set back to false before any real use.
+// When true, /verify skips the payment gate entirely so handleVerify's
+// real logic can be tested without a signed x402 payment. /stamp is
+// UNAFFECTED and still requires real payment.
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TEMPORARY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+const BYPASS_PAYMENT_FOR_VERIFY_TESTING = true;
+// ==========================================================================
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -85,8 +95,6 @@ export default {
     }
 
     // --- TEST ROUTE — throwaway, no payment required ---
-    // Confirms @trustnxt/c2pa-ts loads and runs inside this Worker.
-    // Remove this block once the experiment is complete.
     if (url.pathname === "/test-c2pa") {
       return await testC2paParse();
     }
@@ -107,7 +115,12 @@ export default {
           status: "healthy",
           runtime: "v8-edge-isolate",
           gateways: ["/verify", "/stamp"],
-          network: "Base Mainnet"
+          network: "Base Mainnet",
+          // Loud, visible reminder in the live health check that a
+          // bypass is currently active — hard to forget about.
+          ...(BYPASS_PAYMENT_FOR_VERIFY_TESTING
+            ? { warning: "TEMPORARY: /verify payment gate is BYPASSED for testing." }
+            : {})
         }),
         {
           status: 200,
@@ -135,11 +148,15 @@ export default {
 
     if (url.pathname === "/verify" || url.pathname === "/stamp") {
 
+      const isVerifyBypass = url.pathname === "/verify" && BYPASS_PAYMENT_FOR_VERIFY_TESTING;
+
       const paymentHeader = request.headers.get(PAYMENT_HEADER);
       const developerWallet = env.SETTLEMENT_WALLET ?? "0x0000000000000000000000000000000000000000";
 
-      if (!paymentHeader || paymentHeader.trim() === "") {
-        return payment402Response(developerWallet);
+      if (!isVerifyBypass) {
+        if (!paymentHeader || paymentHeader.trim() === "") {
+          return payment402Response(developerWallet);
+        }
       }
 
       const paymentRequired = {
@@ -152,11 +169,13 @@ export default {
         extra: { name: "USDC", version: "2" }
       };
 
-      const verification = await verifyPayment(paymentHeader, paymentRequired, env);
+      let verification;
+      if (isVerifyBypass) {
+        verification = { valid: true, payer: "TEST-BYPASS-NO-REAL-PAYMENT" };
+      } else {
+        verification = await verifyPayment(paymentHeader, paymentRequired, env);
+      }
 
-      // Determine assetRef for ledger logging. /verify uses a query param;
-      // /stamp uses a JSON body field. Clone the request for /stamp so
-      // handleStamp can still read the body itself afterward.
       let assetRef = null;
 
       if (url.pathname === "/verify") {
@@ -193,11 +212,13 @@ export default {
         );
       }
 
-      // Log the successful settlement in the background — never blocks
-      // the response back to the agent.
-      ctx.waitUntil(
-        logLedgerEntry({ tier, assetRef, amount: "2000" }, env)
-      );
+      // Skip the ledger write during bypass testing — this wasn't a
+      // real payment and shouldn't be recorded as one.
+      if (!isVerifyBypass) {
+        ctx.waitUntil(
+          logLedgerEntry({ tier, assetRef, amount: "2000" }, env)
+        );
+      }
 
       if (url.pathname === "/verify") {
         return await handleVerify(request, env, ctx);
