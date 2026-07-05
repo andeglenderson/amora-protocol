@@ -13,7 +13,7 @@ const PAYMENT_HEADER = 'X-PAYMENT';
 // real logic can be tested without a signed x402 payment. /stamp is
 // UNAFFECTED and still requires real payment.
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TEMPORARY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-const BYPASS_PAYMENT_FOR_VERIFY_TESTING = true;
+const BYPASS_PAYMENT_FOR_VERIFY_TESTING = false;
 // ==========================================================================
 
 const CORS_HEADERS = {
