@@ -1,0 +1,22 @@
+# Amora Protocol
+
+> Amora is an x402 micropayment-gated API for verifying digital content
+> provenance. It checks C2PA manifest signatures and content hash
+> integrity on images for a small per-call fee in USDC on Base mainnet.
+> Built and operated entirely from a mobile device, open source, honest
+> about its current limitations (no external trust-list checking yet).
+
+## Core
+
+- [FAQ](./faq.md): Direct answers to common questions about what
+  Amora checks, what it costs, what it doesn't do yet, and how to
+  call it.
+- [README](./README.md): Full architecture, current implementation
+  status, and roadmap.
+- [MCP Server Card](./.well-known/mcp/server-card.json): Structured
+  tool description for AI agent frameworks.
+
+## Optional
+
+- [GitHub Repository](https://github.com/andeglenderson/amora-protocol):
+  Full source code.
