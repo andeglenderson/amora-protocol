@@ -1,0 +1,21 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Amora Protocol",
+    "identifier": "x402-dual-gateway.andeglenderson.workers.dev"
+  },
+  "entries": [
+    {
+      "identifier": "urn:ai:x402-dual-gateway.andeglenderson.workers.dev:tools:verify",
+      "displayName": "Amora Content Provenance Verifier",
+      "type": "application/mcp-server+json",
+      "url": "https://x402-dual-gateway.andeglenderson.workers.dev/.well-known/mcp/server-card.json",
+      "description": "Verifies C2PA manifest signature integrity and content hash consistency on images, gated by a small x402 USDC micropayment on Base mainnet. Does not yet check signing certificates against an external trust list, and does not detect Exclusion Range metadata manipulation.",
+      "representativeQueries": [
+        "verify if this image has been altered since it was signed",
+        "check the C2PA provenance of this photo",
+        "is this image's content authenticity manifest valid"
+      ]
+    }
+  ]
+}
