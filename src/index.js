@@ -6,16 +6,6 @@ import { testC2paParse } from './test-c2pa.js';
 
 const PAYMENT_HEADER = 'X-PAYMENT';
 
-// ==========================================================================
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TEMPORARY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// TEMPORARY TEST BYPASS — set back to false before any real use.
-// When true, /verify skips the payment gate entirely so handleVerify's
-// real logic can be tested without a signed x402 payment. /stamp is
-// UNAFFECTED and still requires real payment.
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TEMPORARY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-const BYPASS_PAYMENT_FOR_VERIFY_TESTING = false;
-// ==========================================================================
-
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -53,6 +43,51 @@ const SERVER_CARD = {
       "description": "Generate timestamped cryptographic attestation for arbitrary content without inspecting it. Requires x402 payment of 2000 USDC base units per call.",
       "endpoint": "/stamp",
       "method": "POST"
+    }
+  ]
+};
+
+const LLMS_TXT_CONTENT = `# Amora Protocol
+
+> Amora is an x402 micropayment-gated API for verifying digital content
+> provenance. It checks C2PA manifest signatures and content hash
+> integrity on images for a small per-call fee in USDC on Base mainnet.
+> Built and operated entirely from a mobile device, open source, honest
+> about its current limitations (no external trust-list checking yet).
+
+## Core
+
+- [FAQ](./faq.md): Direct answers to common questions about what
+  Amora checks, what it costs, what it doesn't do yet, and how to
+  call it.
+- [README](./README.md): Full architecture, current implementation
+  status, and roadmap.
+- [MCP Server Card](./.well-known/mcp/server-card.json): Structured
+  tool description for AI agent frameworks.
+
+## Optional
+
+- [GitHub Repository](https://github.com/andeglenderson/amora-protocol):
+  Full source code.`;
+
+const AI_CATALOG_JSON_CONTENT = {
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Amora Protocol",
+    "identifier": "x402-dual-gateway.andeglenderson.workers.dev"
+  },
+  "entries": [
+    {
+      "identifier": "urn:ai:x402-dual-gateway.andeglenderson.workers.dev:tools:verify",
+      "displayName": "Amora Content Provenance Verifier",
+      "type": "application/mcp-server+json",
+      "url": "https://x402-dual-gateway.andeglenderson.workers.dev/.well-known/mcp/server-card.json",
+      "description": "Verifies C2PA manifest signature integrity and content hash consistency on images, gated by a small x402 USDC micropayment on Base mainnet. Does not yet check signing certificates against an external trust list, and does not detect Exclusion Range metadata manipulation.",
+      "representativeQueries": [
+        "verify if this image has been altered since it was signed",
+        "check the C2PA provenance of this photo",
+        "is this image's content authenticity manifest valid"
+      ]
     }
   ]
 };
@@ -99,6 +134,28 @@ export default {
       return await testC2paParse();
     }
 
+    // --- llms.txt — machine-readable index ---
+    if (url.pathname === "/llms.txt") {
+      return new Response(LLMS_TXT_CONTENT, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          ...CORS_HEADERS
+        }
+      });
+    }
+
+    // --- ARD ai-catalog.json — agent discovery ---
+    if (url.pathname === "/ai-catalog.json" || url.pathname === "/.well-known/ai-catalog.json") {
+      return new Response(JSON.stringify(AI_CATALOG_JSON_CONTENT, null, 2), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          ...CORS_HEADERS
+        }
+      });
+    }
+
     if (url.pathname === "/.well-known/mcp/server-card.json") {
       return new Response(JSON.stringify(SERVER_CARD), {
         status: 200,
@@ -115,12 +172,7 @@ export default {
           status: "healthy",
           runtime: "v8-edge-isolate",
           gateways: ["/verify", "/stamp"],
-          network: "Base Mainnet",
-          // Loud, visible reminder in the live health check that a
-          // bypass is currently active — hard to forget about.
-          ...(BYPASS_PAYMENT_FOR_VERIFY_TESTING
-            ? { warning: "TEMPORARY: /verify payment gate is BYPASSED for testing." }
-            : {})
+          network: "Base Mainnet"
         }),
         {
           status: 200,
@@ -148,15 +200,11 @@ export default {
 
     if (url.pathname === "/verify" || url.pathname === "/stamp") {
 
-      const isVerifyBypass = url.pathname === "/verify" && BYPASS_PAYMENT_FOR_VERIFY_TESTING;
-
       const paymentHeader = request.headers.get(PAYMENT_HEADER);
       const developerWallet = env.SETTLEMENT_WALLET ?? "0x0000000000000000000000000000000000000000";
 
-      if (!isVerifyBypass) {
-        if (!paymentHeader || paymentHeader.trim() === "") {
-          return payment402Response(developerWallet);
-        }
+      if (!paymentHeader || paymentHeader.trim() === "") {
+        return payment402Response(developerWallet);
       }
 
       const paymentRequired = {
@@ -169,12 +217,7 @@ export default {
         extra: { name: "USDC", version: "2" }
       };
 
-      let verification;
-      if (isVerifyBypass) {
-        verification = { valid: true, payer: "TEST-BYPASS-NO-REAL-PAYMENT" };
-      } else {
-        verification = await verifyPayment(paymentHeader, paymentRequired, env);
-      }
+      const verification = await verifyPayment(paymentHeader, paymentRequired, env);
 
       let assetRef = null;
 
@@ -212,13 +255,9 @@ export default {
         );
       }
 
-      // Skip the ledger write during bypass testing — this wasn't a
-      // real payment and shouldn't be recorded as one.
-      if (!isVerifyBypass) {
-        ctx.waitUntil(
-          logLedgerEntry({ tier, assetRef, amount: "2000" }, env)
-        );
-      }
+      ctx.waitUntil(
+        logLedgerEntry({ tier, assetRef, amount: "2000" }, env)
+      );
 
       if (url.pathname === "/verify") {
         return await handleVerify(request, env, ctx);
