@@ -1,0 +1,98 @@
+name: SEN test asset - generate and inspect
+
+# Manual trigger only — this is a diagnostic tool, not part of the deploy pipeline.
+# Run it from the Actions tab (or GitHub mobile app: Actions > this workflow > Run workflow).
+on:
+  workflow_dispatch: {}
+
+jobs:
+  generate-and-inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install project dependencies (includes @trustnxt/c2pa-ts)
+        run: npm install
+
+      - name: Create a minimal test JPEG
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq imagemagick
+          convert -size 64x64 xc:skyblue sample.jpg
+
+      # c2patool is the OFFICIAL CLI from the Content Authenticity Initiative
+      # (contentauth/c2pa-rs) — a different, separately-maintained tool from
+      # @trustnxt/c2pa-ts. We only use it here to SIGN a test asset; your
+      # production Worker still uses @trustnxt/c2pa-ts to READ/verify.
+      - name: Locate latest c2patool Linux release
+        id: c2patool
+        run: |
+          URL=$(curl -s https://api.github.com/repos/contentauth/c2pa-rs/releases \
+            | jq -r '[.[] | select(.tag_name | startswith("c2patool-"))][0].assets[]
+                     | select(.name | endswith("x86_64-unknown-linux-gnu.tar.gz"))
+                     | .browser_download_url')
+          if [ -z "$URL" ]; then
+            echo "Could not find a c2patool Linux release asset — check https://github.com/contentauth/c2pa-rs/releases manually" >&2
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Install c2patool
+        run: |
+          curl -L -o c2patool.tar.gz "${{ steps.c2patool.outputs.url }}"
+          tar -xzf c2patool.tar.gz
+          chmod +x c2patool/c2patool
+          sudo mv c2patool/c2patool /usr/local/bin/c2patool
+          c2patool --version
+
+      # NOTE — honest scope: this signs with c2patool's built-in DEV/TEST
+      # key and certificate (no private_key/sign_cert specified in the
+      # manifest config, which c2patool's own docs confirm falls back to
+      # the built-in dev signer). This tests whether c2pa.js correctly
+      # PARSES sen.network.* custom assertions. It does NOT test AL2
+      # hardware attestation, HSM-backed signing, or OSNMA — that needs
+      # real hardware and is a separate, later test.
+      - name: Write test manifest with SEN custom assertions
+        run: |
+          cat > sen-manifest.json << 'EOF'
+          {
+            "assertions": [
+              {
+                "label": "sen.network.telemetry",
+                "data": {
+                  "gyroscope": [0.01, -0.02, 9.81],
+                  "ambient_light_lux": 480,
+                  "solar_angle": 42.7,
+                  "osnma_authenticated_coordinates": "-16.5040,-39.1044"
+                }
+              },
+              {
+                "label": "sen.network.pricing",
+                "data": {
+                  "base_price": 1.0,
+                  "floor_price": 0.01,
+                  "half_life_seconds": 21600
+                }
+              }
+            ]
+          }
+          EOF
+
+      - name: Sign test asset
+        run: |
+          mkdir -p test-assets
+          c2patool sample.jpg -m sen-manifest.json -o test-assets/sen-test-signed.jpg -f
+
+      - name: Inspect real manifest structure and test extractSenAssertions()
+        run: node test-assets/dump-manifest.mjs test-assets/sen-test-signed.jpg
+
+      - name: Upload signed test asset as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sen-test-signed-asset
+          path: test-assets/sen-test-signed.jpg
