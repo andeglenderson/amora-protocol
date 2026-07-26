@@ -10,6 +10,26 @@
 // "verified" result here means the manifest is internally consistent
 // and unmodified since signing — it does NOT confirm the signer's
 // real-world identity or legitimacy. That gap is the next build task.
+//
+// SEN ADDITION (this change) — HONEST SCOPE: this adds a best-effort
+// extraction of SEN's custom C2PA assertions (sen.network.telemetry,
+// sen.network.pricing, sen.network.semantics) when present, so /verify
+// can surface them alongside the standard validation result. It does
+// NOT yet do anything with them — no pricing enforcement, no telemetry
+// checks, no escrow interaction. It's read-only surfacing, nothing more.
+//
+// UNCONFIRMED — VERIFY BEFORE MERGING: extractSenAssertions() below
+// guesses at how to enumerate assertions on the parsed manifest object
+// (manifestStore.manifests / manifest.assertions). I could not confirm
+// the exact property/method names against @trustnxt/c2pa-ts's actual
+// source — the README documents ManifestStore.read()/.validate() but
+// not the assertion-enumeration surface. Do NOT trust this as correct.
+// Before merging: console.log(JSON.stringify(manifestStore, null, 2))
+// (or inspect it in a debugger) against a real test asset carrying a
+// sen.network.* assertion, and fix extractSenAssertions() to match
+// whatever shape actually comes back. Until then this function is
+// wrapped in a try/catch and will just report "unavailable" rather
+// than break /verify if it's wrong.
 
 import { createAsset } from '@trustnxt/c2pa-ts/asset';
 import { SuperBox } from '@trustnxt/c2pa-ts/jumbf';
@@ -21,6 +41,45 @@ const ATTESTATION_TEXT =
   "checked against an external Trust List — chain-of-trust validation " +
   "is not yet implemented. A structurally valid signature does not " +
   "confirm the signer's real-world identity or legitimacy.";
+
+const SEN_LABELS = [
+  'sen.network.telemetry',
+  'sen.network.pricing',
+  'sen.network.semantics'
+];
+
+// UNCONFIRMED — see header note. This is a best-effort guess at the
+// c2pa-ts assertion-access API, not a confirmed one. Test against a
+// real SEN-signed asset before relying on this in production.
+function extractSenAssertions(manifestStore) {
+  const found = {};
+  try {
+    // Guess: active manifest may be exposed as manifestStore.manifests
+    // (a Map or array) — adjust once the real shape is confirmed.
+    const manifests = manifestStore?.manifests;
+    if (!manifests) return { available: false, reason: 'no manifests property found on manifestStore' };
+
+    const manifestList = manifests instanceof Map ? [...manifests.values()] : manifests;
+
+    for (const manifest of manifestList) {
+      const assertions = manifest?.assertions ?? manifest?.assertionStore?.assertions;
+      if (!assertions) continue;
+
+      const assertionList = assertions instanceof Map ? [...assertions.values()] : assertions;
+
+      for (const assertion of assertionList) {
+        const label = assertion?.label ?? assertion?.fullLabel;
+        if (label && SEN_LABELS.includes(label)) {
+          found[label] = assertion?.data ?? assertion?.content ?? null;
+        }
+      }
+    }
+
+    return { available: Object.keys(found).length > 0, assertions: found };
+  } catch (err) {
+    return { available: false, reason: `extraction failed: ${err.message}` };
+  }
+}
 
 export async function handleVerify(request, env, ctx) {
   const timestamp = new Date().toISOString();
@@ -91,9 +150,10 @@ export async function handleVerify(request, env, ctx) {
 
     // --- Parse and validate ---
     let validationResult;
+    let manifestStore;
     try {
       const superBox = SuperBox.fromBuffer(jumbf);
-      const manifestStore = ManifestStore.read(superBox);
+      manifestStore = ManifestStore.read(superBox);
       validationResult = await manifestStore.validate(asset);
     } catch (parseErr) {
       return jsonResponse(200, {
@@ -105,12 +165,16 @@ export async function handleVerify(request, env, ctx) {
       });
     }
 
+    // SEN addition — best-effort, non-blocking. See UNCONFIRMED note above.
+    const senData = extractSenAssertions(manifestStore);
+
     return jsonResponse(200, {
       status: "verified",
       gateway: "Trust Oracle (/verify)",
       asset: assetUrl,
       assertion: ATTESTATION_TEXT,
       validationResult,
+      sen: senData,
       timestamp
     });
 
