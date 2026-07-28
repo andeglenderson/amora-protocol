@@ -1,0 +1,36 @@
+name: Pay Gateway (LIVE - spends real USDC)
+
+# Manual trigger ONLY. This spends real Base mainnet USDC every time it
+# runs — do not wire this to push/PR triggers.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "yes" to confirm you want to spend real USDC'
+        required: true
+        default: 'no'
+
+jobs:
+  pay-and-verify:
+    if: github.event.inputs.confirm == 'yes'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # UPDATED: x402-axios (v1) is deprecated and its pinned internal
+      # dependency no longer resolves on npm (ETARGET error). Using the
+      # confirmed v2 scoped packages instead.
+      - name: Install dependencies
+        run: npm install axios @x402/axios @x402/evm @coinbase/cdp-sdk dotenv viem
+
+      - name: Run paying test client
+        env:
+          CDP_API_KEY_ID: ${{ secrets.CDP_API_KEY_ID }}
+          CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
+          CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
+        run: node pay-gateway-client.mjs
